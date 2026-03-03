@@ -1,105 +1,40 @@
 import sys
 import os
 from datetime import datetime
-from PySide6.QtWidgets import (QApplication, QMainWindow, QMessageBox,
-                               QTableWidget, QTableWidgetItem, QHeaderView,
-                               QPushButton, QHBoxLayout, QVBoxLayout, QWidget,
-                               QComboBox, QSpinBox, QCheckBox, QLineEdit,
-                               QTextEdit, QGroupBox, QLabel, QProgressBar,
-                               QTabWidget, QAbstractItemView, QDialog, QFormLayout,
-                               QDialogButtonBox, QFileDialog, QScrollArea, QGridLayout,
-                               QDoubleSpinBox, QDateEdit, QDateTimeEdit, QPlainTextEdit,
-                               QListView, QMenuBar, QMenu, QSplitter, QFrame)
-from PySide6.QtCore import Qt, QDate, QDateTime, Signal, QFile, QIODevice
-from PySide6.QtGui import QAction, QStandardItemModel, QStandardItem
+
+# Добавляем путь к текущей папке
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+
+from PySide6.QtWidgets import *
+from PySide6.QtCore import Qt, QDateTime, Signal, QFile, QIODevice
+from PySide6.QtGui import QStandardItemModel, QStandardItem
 from PySide6.QtUiTools import QUiLoader
 
-# Добавляем путь к папке settings
-settings_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "settings")
-if settings_path not in sys.path:
-    sys.path.insert(0, settings_path)
-    print(f"✅ Добавлен путь к настройкам: {settings_path}")
+# ========== ИМПОРТ НАШИХ МОДУЛЕЙ ==========
+import paths
+from database_handler import DatabaseHandler
+from ui.ui_reportwindow import Ui_reportWindow  # или как называется класс
 
-# Импортируем DatabaseHandler из database_handler.py
+# ========== ИМПОРТ plane (если доступен) ==========
+PLANE_AVAILABLE = False
 try:
-    from python_files.database.database_handler import DatabaseHandler
+    from plane import MainWindow as PlaneWindow
+    PLANE_AVAILABLE = True
+except ImportError:
+    print("⚠️ Модуль plane не найден, функция схем будет недоступна")
+
+# ========== ИМПОРТ settings (если доступен) ==========
+SETTINGS_AVAILABLE = False
+try:
     from settings import MainWindow as SettingsWindow
     SETTINGS_AVAILABLE = True
-    print("✅ Модуль настроек загружен")
-except ImportError as e:
-    print(f"❌ Ошибка загрузки настроек: {e}")
-    SETTINGS_AVAILABLE = False
-    SettingsWindow = None
-
-# Путь к БД (ОДИН ПУТЬ!)
-python_files_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-db_path = os.path.join(python_files_dir, "database", "company.db")
-ui_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ReportWindow.ui")
-
-print(f"Путь к БД: {db_path}")
-print(f"Файл БД существует: {os.path.exists(db_path)}")
-print(f"Путь к UI: {ui_path}")
-print(f"Файл UI существует: {os.path.exists(ui_path)}")
+except ImportError:
+    print("⚠️ Модуль settings не найден, функция настроек будет недоступна")
 
 
-# ========== ДИАЛОГ СПИСКА ОТЧЕТОВ ==========
-class ReportsListDialog(QDialog):
-    """Диалог со списком всех отчетов"""
-
-    def __init__(self, db, parent=None):
-        super().__init__(parent)
-        self.db = db
-        self.selected_report_id = None
-        self.setWindowTitle("Список отчетов")
-        self.setMinimumSize(800, 500)
-
-        layout = QVBoxLayout(self)
-
-        # Таблица отчетов
-        self.table = QTableWidget()
-        self.table.setColumnCount(5)
-        self.table.setHorizontalHeaderLabels(["ID", "Название", "Дата", "Описание", "№ приказа"])
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.table.setSelectionMode(QTableWidget.SingleSelection)
-        self.table.doubleClicked.connect(self.open_report)
-        layout.addWidget(self.table)
-
-        # Кнопки
-        btn_layout = QHBoxLayout()
-        open_btn = QPushButton("Открыть")
-        open_btn.clicked.connect(self.open_report)
-        cancel_btn = QPushButton("Закрыть")
-        cancel_btn.clicked.connect(self.reject)
-
-        btn_layout.addWidget(open_btn)
-        btn_layout.addWidget(cancel_btn)
-        layout.addLayout(btn_layout)
-
-        self.load_reports()
-
-    def load_reports(self):
-        reports = self.db.get_all_reports()
-        self.table.setRowCount(len(reports))
-
-        for i, report in enumerate(reports):
-            self.table.setItem(i, 0, QTableWidgetItem(str(report[0])))
-            self.table.setItem(i, 1, QTableWidgetItem(report[1]))
-            self.table.setItem(i, 2, QTableWidgetItem(report[2]))
-            self.table.setItem(i, 3, QTableWidgetItem(report[3]))
-            self.table.setItem(i, 4, QTableWidgetItem(str(report[4])))
-
-    def open_report(self):
-        selected = self.table.currentRow()
-        if selected >= 0:
-            self.selected_report_id = int(self.table.item(selected, 0).text())
-            self.accept()
-
-
-# ========== ДИАЛОГ ПОДТВЕРЖДЕНИЯ ==========
 class ConfirmationDialog(QDialog):
-    """Диалог подтверждения действия"""
-
     def __init__(self, message="Вы уверены?", parent=None):
         super().__init__(parent)
         self.setWindowTitle("Подтверждение")
@@ -114,10 +49,7 @@ class ConfirmationDialog(QDialog):
         layout.addWidget(btn_box)
 
 
-# ========== ДИАЛОГ СОХРАНЕНИЯ ==========
 class SaveConfirmationDialog(QDialog):
-    """Диалог сохранения перед новым документом"""
-
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Сохранение")
@@ -138,10 +70,7 @@ class SaveConfirmationDialog(QDialog):
         layout.addWidget(btn_box)
 
 
-# ========== ДИАЛОГ НОВОГО РАБОЧЕГО МЕСТА ==========
 class WorkplaceDialog(QDialog):
-    """Диалог для создания/редактирования рабочего места"""
-
     def __init__(self, db, room_id, workplace_number, parent=None):
         super().__init__(parent)
         self.db = db
@@ -152,9 +81,7 @@ class WorkplaceDialog(QDialog):
 
         layout = QVBoxLayout(self)
 
-        # Форма
         form = QFormLayout()
-
         self.equipment_type = QComboBox()
         self.equipment_type.addItems(["Компьютер", "Монитор", "Ноутбук", "Принтер", "МФУ", "Другое"])
         form.addRow("Тип оборудования:", self.equipment_type)
@@ -182,7 +109,6 @@ class WorkplaceDialog(QDialog):
 
         layout.addLayout(form)
 
-        # Кнопки
         btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         btn_box.accepted.connect(self.accept)
         btn_box.rejected.connect(self.reject)
@@ -202,11 +128,8 @@ class WorkplaceDialog(QDialog):
         }
 
 
-# ========== ВИДЖЕТ РАБОЧЕГО МЕСТА ==========
 class WorkplaceWidget(QWidget):
-    """Виджет для отображения рабочего места"""
-
-    edit_clicked = Signal(int)  # номер места
+    edit_clicked = Signal(int)
     delete_clicked = Signal(int)
 
     def __init__(self, number, data=None):
@@ -217,12 +140,10 @@ class WorkplaceWidget(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(5, 5, 5, 5)
 
-        # Заголовок
         title = QLabel(f"Место №{number}")
         title.setMinimumWidth(80)
         layout.addWidget(title)
 
-        # Информация
         if data and data.get('name'):
             info = QLabel(f"{data.get('type', '')}: {data.get('name', '')}")
             layout.addWidget(info, 1)
@@ -231,7 +152,6 @@ class WorkplaceWidget(QWidget):
             empty.setStyleSheet("color: gray; font-style: italic;")
             layout.addWidget(empty, 1)
 
-        # Кнопки
         edit_btn = QPushButton("✏️")
         edit_btn.setMaximumWidth(30)
         edit_btn.clicked.connect(lambda: self.edit_clicked.emit(self.number))
@@ -244,51 +164,27 @@ class WorkplaceWidget(QWidget):
         layout.addWidget(delete_btn)
 
 
-# ========== ГЛАВНОЕ ОКНО ==========
 class ReportWindow(QMainWindow):
-    """Главное окно отчетности"""
-
     def __init__(self):
         super().__init__()
-        self.db = DatabaseHandler(db_path)
+        self.ui = Ui_reportWindow()
+        self.ui.setupUi(self)
+        self.db = DatabaseHandler()
         self.current_report_id = None
         self.current_room_id = None
-        self.workplaces_data = {}  # {номер_места: данные}
-        self.arrival_items = []  # Список позиций поступления для переноса
-        self.distribution_model = None  # Модель для таблицы распределения
-        self.settings_window = None  # Для окна настроек
-        self.setup_ui()
+        self.workplaces_data = {}
+        self.arrival_items = []
+        self.distribution_model = None
+        self.settings_window = None
+        self.plane_window = None
+        self.create_menu()
+        self.setup_tabs()
         self.load_initial_data()
         self.showMaximized()
 
-    def setup_ui(self):
-        """Загрузка UI из файла"""
-        if not os.path.exists(ui_path):
-            QMessageBox.critical(self, "Ошибка", f"Файл UI не найден: {ui_path}")
-            return
-
-        loader = QUiLoader()
-        ui_file = QFile(ui_path)
-        ui_file.open(QIODevice.ReadOnly)
-        self.ui = loader.load(ui_file, self)
-        ui_file.close()
-
-        if not self.ui:
-            QMessageBox.critical(self, "Ошибка", "Не удалось загрузить интерфейс")
-            return
-
-        self.setCentralWidget(self.ui.centralwidget)
-
-        # Создаем меню программно
-        self.create_menu()
-
-        self.setup_tabs()
-
     def create_menu(self):
-        """Создание меню программно"""
         menubar = self.menuBar()
 
-        # Файл
         file_menu = menubar.addMenu("Файл")
         file_menu.addAction("Новая отчетность", self.new_report)
         file_menu.addAction("Новое поступление", self.new_arrival)
@@ -300,92 +196,64 @@ class ReportWindow(QMainWindow):
         file_menu.addSeparator()
         file_menu.addAction("Выход", self.close)
 
-        # Настройки
         settings_menu = menubar.addMenu("Настройки")
         settings_menu.addAction("Размер шрифта", self.on_font_size)
         settings_menu.addAction("Тема", self.on_theme)
         settings_menu.addSeparator()
 
-        # Настройка окружения - если доступен файл настроек
         if SETTINGS_AVAILABLE:
             settings_menu.addAction("Редактировать рабочее окружение", self.open_settings_window)
         else:
             action = settings_menu.addAction("Редактировать рабочее окружение (недоступно)")
             action.setEnabled(False)
 
-        # Справка
         help_menu = menubar.addMenu("Справка")
         help_menu.addAction("Версия", self.show_version)
         help_menu.addAction("О программе", self.show_project_info)
 
-        # Открыть схему
         schema_menu = menubar.addMenu("Открыть схему")
         schema_menu.addAction("Показать схему", self.show_schema)
 
-        print("✅ Меню создано")
-
     def open_settings_window(self):
-        """Открыть окно настроек из settings.py"""
         if not SETTINGS_AVAILABLE:
             QMessageBox.warning(self, "Ошибка", "Модуль настроек не найден")
             return
 
         try:
-            # Создаем экземпляр окна настроек
-            self.settings_window = SettingsWindow()
-
-            # Чтобы окно удалялось при закрытии
-            self.settings_window.setAttribute(Qt.WA_DeleteOnClose)
-
-            # Показываем окно
-            self.settings_window.show()
-
-            print("✅ Окно настроек открыто")
-
+            dialog = SettingsWindow()
+            dialog.exec()
+            self.refresh_comboboxes()
         except Exception as e:
-            QMessageBox.critical(self, "Ошибка", f"Не удалось открыть настройки:\n{e}")
+            # Добавим проверку - если это не настоящая ошибка, не показываем
+            if "exec" not in str(e):  # игнорируем ошибку про exec
+                QMessageBox.critical(self, "Ошибка", f"Не удалось открыть настройки:\n{e}")
 
     def show_schema(self):
-        """Открыть окно со схемой из plane.py"""
+        if not PLANE_AVAILABLE:
+            QMessageBox.warning(self, "Ошибка", "Модуль схем не найден")
+            return
         try:
-            # Путь к файлу plane.py
-            plane_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                                      "report_image", "plane.py")
-
-            if not os.path.exists(plane_path):
-                QMessageBox.warning(self, "Ошибка", f"Файл схемы не найден:\n{plane_path}")
-                return
-
-            # Запускаем plane.py как отдельный процесс
-            import subprocess
-            subprocess.Popen([sys.executable, plane_path])
-
-            self.statusBar().showMessage("Схема открыта в новом окне", 3000)
-
+            self.plane_window = PlaneWindow()
+            self.plane_window.show()
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", f"Не удалось открыть схему:\n{e}")
 
     def setup_tabs(self):
-        """Настройка вкладок"""
         self.setup_arrival_tab()
         self.setup_inventory_tab()
         self.setup_distribution_tab()
 
     # ========== ВКЛАДКА ПОСТУПЛЕНИЕ ==========
     def setup_arrival_tab(self):
-        """Настройка вкладки Поступление"""
-        # Заполняем комбобоксы
         self.load_branches_to_combo(self.ui.comboBox_5)
         self.load_branches_to_combo(self.ui.comboBox_6)
         self.load_employees_to_combo(self.ui.comboBox_8)
 
-        # Увеличиваем максимальное значение цены
         if hasattr(self.ui, 'doubleSpinBox'):
             self.ui.doubleSpinBox.setMaximum(9999999.99)
             self.ui.doubleSpinBox.setMinimum(0)
             self.ui.doubleSpinBox.setSingleStep(100)
 
-        # Настройка tableWidget для отображения базы данных поступлений
         self.ui.tableWidget.setColumnCount(7)
         self.ui.tableWidget.setHorizontalHeaderLabels([
             "№", "Название", "Категория", "Тип", "Количество", "Цена", "Серийный №"
@@ -394,7 +262,6 @@ class ReportWindow(QMainWindow):
         self.ui.tableWidget.setSelectionBehavior(QTableWidget.SelectRows)
         self.ui.tableWidget.setSelectionMode(QTableWidget.MultiSelection)
 
-        # Подключаем кнопки из UI
         if hasattr(self.ui, 'pushButton_5'):
             self.ui.pushButton_5.clicked.connect(self.export_arrival_pdf)
         if hasattr(self.ui, 'pushButton_3'):
@@ -406,29 +273,25 @@ class ReportWindow(QMainWindow):
         if hasattr(self.ui, 'pushButton_16'):
             self.ui.pushButton_16.clicked.connect(self.add_arrival_position)
 
-        # Загружаем существующие поступления
         self.load_arrival_data()
 
     def load_arrival_data(self):
-        """Загрузка данных из БД в таблицу поступлений"""
         try:
             equipment = self.db.get_all_equipment()
             self.ui.tableWidget.setRowCount(0)
             for i, item in enumerate(equipment):
                 self.ui.tableWidget.insertRow(i)
                 self.ui.tableWidget.setItem(i, 0, QTableWidgetItem(str(i + 1)))
-                self.ui.tableWidget.setItem(i, 1, QTableWidgetItem(item[1]))  # name
-                self.ui.tableWidget.setItem(i, 2, QTableWidgetItem(item[2]))  # category
-                self.ui.tableWidget.setItem(i, 3, QTableWidgetItem(item[3]))  # type
-                self.ui.tableWidget.setItem(i, 4, QTableWidgetItem("1"))  # quantity
-                self.ui.tableWidget.setItem(i, 5, QTableWidgetItem("0"))  # price
-                self.ui.tableWidget.setItem(i, 6, QTableWidgetItem(item[4]))  # serial_number
-            print(f"Загружено позиций: {len(equipment)}")
+                self.ui.tableWidget.setItem(i, 1, QTableWidgetItem(item[1]))
+                self.ui.tableWidget.setItem(i, 2, QTableWidgetItem(item[2]))
+                self.ui.tableWidget.setItem(i, 3, QTableWidgetItem(item[3]))
+                self.ui.tableWidget.setItem(i, 4, QTableWidgetItem("1"))
+                self.ui.tableWidget.setItem(i, 5, QTableWidgetItem("0"))
+                self.ui.tableWidget.setItem(i, 6, QTableWidgetItem(item[4]))
         except Exception as e:
             print(f"Ошибка загрузки поступлений: {e}")
 
     def add_arrival_position(self):
-        """Добавление позиции в таблицу поступления и БД"""
         data = {
             'name': self.ui.lineEdit_15.text() if hasattr(self.ui, 'lineEdit_15') else "",
             'category': self.ui.comboBox_9.currentText() if hasattr(self.ui, 'comboBox_9') else "",
@@ -465,7 +328,6 @@ class ReportWindow(QMainWindow):
             QMessageBox.critical(self, "Ошибка", f"Не удалось сохранить: {e}")
 
     def clear_arrival_form(self):
-        """Очистка формы поступления"""
         if hasattr(self.ui, 'lineEdit_15'):
             self.ui.lineEdit_15.clear()
         if hasattr(self.ui, 'lineEdit_18'):
@@ -476,15 +338,11 @@ class ReportWindow(QMainWindow):
             self.ui.doubleSpinBox.setValue(0)
 
     def export_arrival_txt(self):
-        """Выгрузка поступления в .txt"""
         if self.ui.tableWidget.rowCount() == 0:
             QMessageBox.warning(self, "Ошибка", "Нет данных для выгрузки")
             return
 
-        file_path, _ = QFileDialog.getSaveFileName(
-            self, "Сохранить отчет", "", "Текстовые файлы (*.txt)"
-        )
-
+        file_path, _ = QFileDialog.getSaveFileName(self, "Сохранить отчет", "", "Текстовые файлы (*.txt)")
         if not file_path:
             return
 
@@ -515,9 +373,7 @@ class ReportWindow(QMainWindow):
                     cat = self.ui.tableWidget.item(row, 2).text() if self.ui.tableWidget.item(row, 2) else ""
                     qty = self.ui.tableWidget.item(row, 4).text() if self.ui.tableWidget.item(row, 4) else "0"
                     price = self.ui.tableWidget.item(row, 5).text() if self.ui.tableWidget.item(row, 5) else "0"
-
                     f.write(f"{num:<4} {name:<20} {cat:<15} {qty:<8} {price:<10}\n")
-
                     try:
                         total += int(qty) * float(price)
                     except:
@@ -531,17 +387,14 @@ class ReportWindow(QMainWindow):
             QMessageBox.critical(self, "Ошибка", f"Не удалось сохранить: {e}")
 
     def export_arrival_pdf(self):
-        """Заглушка для PDF"""
         QMessageBox.information(self, "Информация", "Функция PDF будет добавлена позже")
 
     def cancel_arrival(self):
-        """Отмена поступления"""
         dlg = ConfirmationDialog("Отменить ввод данных?", self)
         if dlg.exec() == QDialog.Accepted:
             self.clear_arrival_form()
 
     def save_arrival(self):
-        """Сохранение поступления"""
         dlg = ConfirmationDialog("Сохранить все изменения?", self)
         if dlg.exec() == QDialog.Accepted:
             try:
@@ -552,7 +405,6 @@ class ReportWindow(QMainWindow):
 
     # ========== ВКЛАДКА ИНВЕНТАРИЗАЦИЯ ==========
     def setup_inventory_tab(self):
-        """Настройка вкладки Инвентаризация"""
         self.load_branches_to_combo(self.ui.comboBox_3)
         self.load_branches_to_combo(self.ui.comboBox_4)
         self.load_employees_to_combo(self.ui.comboBox)
@@ -571,7 +423,6 @@ class ReportWindow(QMainWindow):
             if model:
                 model.setHorizontalHeaderLabels(["ID", "Название", "Категория", "Серийный №", "Статус"])
 
-        # Фильтры
         if hasattr(self.ui, 'comboBox_12'):
             self.ui.comboBox_12.currentIndexChanged.connect(self.apply_inventory_filters)
         if hasattr(self.ui, 'comboBox_11'):
@@ -586,13 +437,10 @@ class ReportWindow(QMainWindow):
         self.load_categories_to_combo(self.ui.comboBox_12)
         self.load_types_to_combo(self.ui.comboBox_11)
 
-        # Подключаем кнопку для выгрузки инвентаризации
-        if hasattr(self.ui, 'pushButton_11'):  # "Печать отчетности по комнате"
+        if hasattr(self.ui, 'pushButton_11'):
             self.ui.pushButton_11.clicked.connect(self.export_inventory_room_report)
-            print("✅ Кнопка инвентаризации подключена")
 
     def on_branch_changed_inventory(self):
-        """Изменение филиала во вкладке инвентаризация"""
         branch_id = self.ui.comboBox_4.currentData()
         if branch_id:
             branch = self.db.get_branch(branch_id)
@@ -600,65 +448,49 @@ class ReportWindow(QMainWindow):
                 self.ui.spinBox_3.setMaximum(branch[2])
 
     def on_floor_changed_inventory(self):
-        """Изменение этажа во вкладке инвентаризация"""
         branch_id = self.ui.comboBox_4.currentData()
         floor = self.ui.spinBox_3.value() if hasattr(self.ui, 'spinBox_3') else 1
         if branch_id and floor and hasattr(self.ui, 'comboBox_7'):
             self.load_rooms_to_combo(self.ui.comboBox_7, branch_id, floor)
 
     def on_room_changed_inventory(self):
-        """При изменении комнаты загружаем оборудование"""
         room_id = self.ui.comboBox_7.currentData() if hasattr(self.ui, 'comboBox_7') else None
-
         if not room_id:
             return
 
-        # Загружаем оборудование в tableView
         equipment = self.db.get_equipment_by_room(room_id)
-
         model = self.ui.tableView.model()
         if model:
             model.removeRows(0, model.rowCount())
             for item in equipment:
-                row = []
-                row.append(QStandardItem(str(item[0])))  # ID
-                row.append(QStandardItem(item[1]))  # Название
-                row.append(QStandardItem(item[2]))  # Категория
-                row.append(QStandardItem(item[4]))  # Серийный номер
-                row.append(QStandardItem(item[5]))  # Статус
+                row = [
+                    QStandardItem(str(item[0])),
+                    QStandardItem(item[1]),
+                    QStandardItem(item[2]),
+                    QStandardItem(item[4]),
+                    QStandardItem(item[5])
+                ]
                 model.appendRow(row)
 
-            print(f"Загружено оборудование: {len(equipment)} шт.")
-
     def apply_inventory_filters(self):
-        """Применение фильтров инвентаризации"""
         pass
 
     def export_inventory_room_report(self):
-        """Выгрузка отчета по инвентаризации комнаты в .txt"""
-        # Получаем выбранную комнату
         room_id = self.ui.comboBox_7.currentData() if hasattr(self.ui, 'comboBox_7') else None
-
         if not room_id:
             QMessageBox.warning(self, "Ошибка", "Выберите комнату")
             return
 
-        # Получаем данные о комнате
         room = self.db.get_room(room_id)
         if not room:
-            QMessageBox.warning(self, "Ошибка", "Комната не найдена")
             return
 
-        # Получаем оборудование в комнате
         equipment = self.db.get_equipment_by_room(room_id)
 
-        # Диалог сохранения файла
         file_path, _ = QFileDialog.getSaveFileName(
             self, "Сохранить отчет по инвентаризации",
-            f"Инвентаризация_{room[1]}.txt",
-            "Текстовые файлы (*.txt)"
+            f"Инвентаризация_{room[1]}.txt", "Текстовые файлы (*.txt)"
         )
-
         if not file_path:
             return
 
@@ -667,15 +499,12 @@ class ReportWindow(QMainWindow):
                 f.write("=" * 60 + "\n")
                 f.write("ИНВЕНТАРИЗАЦИОННАЯ ОПИСЬ\n")
                 f.write("=" * 60 + "\n\n")
-
-                # Информация о комнате
                 f.write(f"Комната: {room[1]} - {room[2]}\n")
                 f.write(f"Этаж: {room[3]}\n")
                 f.write(f"Вместимость: {room[4]} чел.\n")
                 f.write(f"Площадь: {room[8]} м²\n")
                 f.write(f"Столов: {room[5]}, Стульев: {room[6]}, Розеток: {room[7]}\n")
                 f.write(f"Дата инвентаризации: {QDateTime.currentDateTime().toString('dd.MM.yyyy hh:mm')}\n\n")
-
                 f.write("=" * 60 + "\n")
                 f.write("ПЕРЕЧЕНЬ ОБОРУДОВАНИЯ\n")
                 f.write("=" * 60 + "\n\n")
@@ -683,17 +512,13 @@ class ReportWindow(QMainWindow):
                 if not equipment:
                     f.write("В комнате нет оборудования\n")
                 else:
-                    # Заголовок таблицы
                     f.write(f"{'№':<4} {'Наименование':<30} {'Категория':<15} {'Тип':<15} {'Серийный №':<15} {'Статус':<10}\n")
                     f.write("-" * 90 + "\n")
-
                     for i, item in enumerate(equipment, 1):
                         f.write(f"{i:<4} {item[1]:<30} {item[2]:<15} {item[3]:<15} {item[4]:<15} {item[5]:<10}\n")
-
                     f.write("-" * 90 + "\n")
                     f.write(f"Всего единиц: {len(equipment)}\n\n")
 
-                # Подписи
                 f.write("\n" + "=" * 60 + "\n")
                 f.write("Ответственный за инвентаризацию:\n\n")
                 f.write("____________________  /______________/\n")
@@ -701,13 +526,11 @@ class ReportWindow(QMainWindow):
                 f.write("Дата: ______________\n")
 
             QMessageBox.information(self, "Успех", f"Отчет сохранен:\n{file_path}")
-
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", f"Не удалось сохранить отчет:\n{e}")
 
     # ========== ВКЛАДКА РАСПРЕДЕЛЕНИЕ ==========
     def setup_distribution_tab(self):
-        """Настройка вкладки Распределение"""
         self.load_employees_with_position(self.ui.comboBox_13)
         self.load_branches_to_combo(self.ui.comboBox_15)
         self.load_branches_to_combo(self.ui.comboBox_14)
@@ -721,7 +544,6 @@ class ReportWindow(QMainWindow):
 
         if hasattr(self.ui, 'pushButton_15'):
             self.ui.pushButton_15.clicked.connect(self.transfer_selected_items)
-            print("✅ Кнопка переноса подключена")
 
         self.ui.comboBox_17.currentIndexChanged.connect(self.apply_distribution_filters)
         self.ui.comboBox_18.currentIndexChanged.connect(self.apply_distribution_filters)
@@ -746,7 +568,6 @@ class ReportWindow(QMainWindow):
             self.ui.pushButton_10.clicked.connect(self.export_final_report)
 
     def setup_distribution_table(self):
-        """Настройка таблицы для распределения"""
         self.distribution_model = QStandardItemModel()
         self.distribution_model.setHorizontalHeaderLabels([
             "ID", "Название", "Категория", "Тип", "Серийный №", "Выбрать"
@@ -758,7 +579,6 @@ class ReportWindow(QMainWindow):
         self.load_distribution_equipment()
 
     def load_distribution_equipment(self):
-        """Загрузка оборудования для распределения"""
         try:
             equipment = self.db.get_all_equipment()
             self.distribution_model.removeRows(0, self.distribution_model.rowCount())
@@ -784,12 +604,10 @@ class ReportWindow(QMainWindow):
                 check_item.setEditable(False)
                 row.append(check_item)
                 self.distribution_model.appendRow(row)
-            print(f"Загружено оборудования для распределения: {len(equipment)}")
         except Exception as e:
             print(f"Ошибка загрузки оборудования: {e}")
 
     def transfer_selected_items(self):
-        """Перенос выбранных позиций в рабочее место"""
         if not self.current_room_id:
             QMessageBox.warning(self, "Ошибка", "Сначала выберите комнату")
             return
@@ -820,11 +638,13 @@ class ReportWindow(QMainWindow):
             return
 
         conn = self.db.get_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT name, category, type, serial_number FROM equipment WHERE equipment_id = ?",
-                       (selected_ids[0],))
-        equip = cursor.fetchone()
-        conn.close()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT name, category, type, serial_number FROM equipment WHERE equipment_id = ?",
+                           (selected_ids[0],))
+            equip = cursor.fetchone()
+        finally:
+            conn.close()
 
         if equip:
             data = {
@@ -850,8 +670,9 @@ class ReportWindow(QMainWindow):
 
             QMessageBox.information(self, "Успех", f"Позиция перенесена на место №{free_spot}")
 
+        self.load_distribution_equipment()
+
     def on_branch_changed_distribution(self):
-        """Изменение филиала во вкладке распределение"""
         branch_id = self.ui.comboBox_14.currentData()
         if branch_id:
             branch = self.db.get_branch(branch_id)
@@ -860,25 +681,21 @@ class ReportWindow(QMainWindow):
                 self.load_distribution_equipment()
 
     def on_floor_changed_distribution(self):
-        """Изменение этажа во вкладке распределение"""
         branch_id = self.ui.comboBox_14.currentData()
         floor = self.ui.spinBox_6.value()
         if branch_id and floor:
             self.load_rooms_to_combo(self.ui.comboBox_16, branch_id, floor)
 
     def on_room_changed_distribution(self):
-        """Изменение комнаты - создаем рабочие места"""
         room_id = self.ui.comboBox_16.currentData()
         if not room_id:
             return
         self.current_room_id = room_id
         room = self.db.get_room(room_id)
         if room:
-            capacity = room[4]
-            self.create_workplaces(capacity)
+            self.create_workplaces(room[4])
 
     def apply_distribution_filters(self):
-        """Применение фильтров распределения"""
         category = self.ui.comboBox_17.currentData()
         type_ = self.ui.comboBox_18.currentData()
         name_filter = self.ui.lineEdit_27.text().lower()
@@ -900,7 +717,6 @@ class ReportWindow(QMainWindow):
             self.ui.tableView_2.setRowHidden(row, not show)
 
     def save_room_distribution(self):
-        """Сохранение распределения для комнаты"""
         if not self.current_room_id:
             QMessageBox.warning(self, "Ошибка", "Выберите комнату")
             return
@@ -909,7 +725,6 @@ class ReportWindow(QMainWindow):
             QMessageBox.information(self, "Успех", "Распределение сохранено")
 
     def reset_room_distribution(self):
-        """Сброс распределения для комнаты"""
         dlg = ConfirmationDialog("Сбросить распределение для этой комнаты?", self)
         if dlg.exec() == QDialog.Accepted:
             self.workplaces_data.clear()
@@ -920,20 +735,17 @@ class ReportWindow(QMainWindow):
                     self.create_workplaces(room[4])
 
     def save_all_distribution(self):
-        """Сохранение всего распределения"""
         dlg = ConfirmationDialog("Сохранить все распределения?", self)
         if dlg.exec() == QDialog.Accepted:
             QMessageBox.information(self, "Успех", "Все распределения сохранены")
 
     def delete_all_distribution(self):
-        """Удаление всего распределения"""
         dlg = ConfirmationDialog("Удалить все распределения?", self)
         if dlg.exec() == QDialog.Accepted:
             self.workplaces_data.clear()
             self.clear_workplaces()
 
     def export_room_report(self):
-        """Выгрузка отчетности по комнате в .txt"""
         room_id = self.ui.comboBox_16.currentData()
         if not room_id:
             QMessageBox.warning(self, "Ошибка", "Выберите комнату")
@@ -943,10 +755,7 @@ class ReportWindow(QMainWindow):
         if not room:
             return
 
-        file_path, _ = QFileDialog.getSaveFileName(
-            self, "Сохранить отчет по комнате", "", "Текстовые файлы (*.txt)"
-        )
-
+        file_path, _ = QFileDialog.getSaveFileName(self, "Сохранить отчет по комнате", "", "Текстовые файлы (*.txt)")
         if not file_path:
             return
 
@@ -986,10 +795,7 @@ class ReportWindow(QMainWindow):
             QMessageBox.critical(self, "Ошибка", f"Не удалось сохранить: {e}")
 
     def export_final_report(self):
-        """Выгрузка финальной отчетности"""
-        file_path, _ = QFileDialog.getSaveFileName(
-            self, "Сохранить финальный отчет", "", "Текстовые файлы (*.txt)"
-        )
+        file_path, _ = QFileDialog.getSaveFileName(self, "Сохранить финальный отчет", "", "Текстовые файлы (*.txt)")
         if not file_path:
             return
         try:
@@ -1010,7 +816,6 @@ class ReportWindow(QMainWindow):
             QMessageBox.critical(self, "Ошибка", f"Не удалось сохранить: {e}")
 
     def setup_workplaces_area(self):
-        """Настройка области для динамических рабочих мест"""
         self.workplaces_scroll = QScrollArea()
         self.workplaces_scroll.setWidgetResizable(True)
         self.workplaces_scroll.setMinimumHeight(300)
@@ -1020,17 +825,17 @@ class ReportWindow(QMainWindow):
         self.workplaces_scroll.setWidget(self.workplaces_container)
         if hasattr(self.ui, 'groupBox_15'):
             layout = self.ui.groupBox_15.layout()
-            if layout:
+            if layout is None:
+                layout = QVBoxLayout(self.ui.groupBox_15)
+                self.ui.groupBox_15.setLayout(layout)
+            else:
                 while layout.count():
                     item = layout.takeAt(0)
                     if item.widget():
                         item.widget().deleteLater()
-            else:
-                layout = QVBoxLayout(self.ui.groupBox_15)
             layout.addWidget(self.workplaces_scroll)
 
     def create_workplaces(self, count):
-        """Создание рабочих мест по количеству"""
         self.clear_workplaces()
         for i in range(1, count + 1):
             widget = WorkplaceWidget(i, self.workplaces_data.get(i))
@@ -1039,14 +844,12 @@ class ReportWindow(QMainWindow):
             self.workplaces_layout.insertWidget(self.workplaces_layout.count() - 1, widget)
 
     def clear_workplaces(self):
-        """Очистка всех рабочих мест"""
         while self.workplaces_layout.count() > 1:
             item = self.workplaces_layout.takeAt(0)
             if item and item.widget():
                 item.widget().deleteLater()
 
     def edit_workplace(self, number):
-        """Редактирование рабочего места"""
         dlg = WorkplaceDialog(self.db, self.current_room_id, number, self)
         if dlg.exec() == QDialog.Accepted:
             data = dlg.get_data()
@@ -1054,7 +857,6 @@ class ReportWindow(QMainWindow):
             self.update_workplace_widget(number, data)
 
     def update_workplace_widget(self, number, data):
-        """Обновление виджета рабочего места"""
         for i in range(self.workplaces_layout.count()):
             item = self.workplaces_layout.itemAt(i)
             if item and item.widget() and isinstance(item.widget(), WorkplaceWidget):
@@ -1067,7 +869,6 @@ class ReportWindow(QMainWindow):
                     break
 
     def delete_workplace(self, number):
-        """Удаление рабочего места"""
         dlg = ConfirmationDialog(f"Удалить рабочее место №{number}?", self)
         if dlg.exec() == QDialog.Accepted:
             if number in self.workplaces_data:
@@ -1076,8 +877,6 @@ class ReportWindow(QMainWindow):
 
     # ========== ОБЩИЕ МЕТОДЫ ==========
     def load_initial_data(self):
-        """Загрузка начальных данных"""
-        print("Загрузка начальных данных...")
         self.load_branches_to_combo(self.ui.comboBox_5)
         self.load_branches_to_combo(self.ui.comboBox_6)
         self.load_employees_to_combo(self.ui.comboBox_8)
@@ -1093,10 +892,8 @@ class ReportWindow(QMainWindow):
         if hasattr(self.ui, 'dateTimeEdit'):
             self.ui.dateTimeEdit.setDateTime(QDateTime.currentDateTime())
         self.ui.progressBar.setValue(0)
-        print("Загрузка данных завершена")
 
     def load_branches_to_combo(self, combo):
-        """Загрузка филиалов в комбобокс"""
         if not combo:
             return
         combo.clear()
@@ -1109,7 +906,6 @@ class ReportWindow(QMainWindow):
             print(f"Ошибка загрузки филиалов: {e}")
 
     def load_employees_to_combo(self, combo):
-        """Загрузка сотрудников в комбобокс"""
         if not combo:
             return
         combo.clear()
@@ -1122,7 +918,6 @@ class ReportWindow(QMainWindow):
             print(f"Ошибка загрузки сотрудников: {e}")
 
     def load_employees_with_position(self, combo):
-        """Загрузка сотрудников с разделением ФИО и должности"""
         if not combo:
             return
         combo.clear()
@@ -1135,7 +930,6 @@ class ReportWindow(QMainWindow):
             print(f"Ошибка загрузки сотрудников: {e}")
 
     def load_categories_to_combo(self, combo):
-        """Загрузка категорий оборудования"""
         if not combo:
             return
         combo.clear()
@@ -1145,7 +939,6 @@ class ReportWindow(QMainWindow):
             combo.addItem(cat, cat)
 
     def load_types_to_combo(self, combo):
-        """Загрузка типов оборудования"""
         if not combo:
             return
         combo.clear()
@@ -1155,7 +948,6 @@ class ReportWindow(QMainWindow):
             combo.addItem(t, t)
 
     def load_rooms_to_combo(self, combo, branch_id, floor):
-        """Загрузка комнат в комбобокс"""
         if not combo:
             return
         combo.clear()
@@ -1165,13 +957,11 @@ class ReportWindow(QMainWindow):
                 rooms = self.db.get_rooms_by_branch_and_floor(branch_id, floor)
                 for room in rooms:
                     combo.addItem(f"{room[1]} - {room[2]}", room[0])
-                print(f"Загружено комнат: {len(rooms)}")
             except Exception as e:
                 print(f"Ошибка загрузки комнат: {e}")
 
     # ========== МЕТОДЫ МЕНЮ ==========
     def new_report(self):
-        """Новая отчетность"""
         dlg = SaveConfirmationDialog(self)
         result = dlg.exec()
         if result == 1:
@@ -1181,7 +971,6 @@ class ReportWindow(QMainWindow):
             self.clear_all()
 
     def new_arrival(self):
-        """Новое поступление"""
         dlg = SaveConfirmationDialog(self)
         result = dlg.exec()
         if result == 1:
@@ -1191,7 +980,6 @@ class ReportWindow(QMainWindow):
             self.clear_arrival_tab()
 
     def save_report_txt(self):
-        """Сохранить отчет в .txt"""
         current_tab = self.ui.tabWidget.currentIndex()
         if current_tab == 0:
             self.export_room_report()
@@ -1201,18 +989,10 @@ class ReportWindow(QMainWindow):
             self.export_arrival_txt()
 
     def save_report_as(self):
-        """Сохранить как"""
         self.save_report_txt()
 
     def show_reports_list(self):
-        """Показать список отчетов"""
-        dlg = ReportsListDialog(self.db, self)
-        if dlg.exec() == QDialog.Accepted and dlg.selected_report_id:
-            report_id = dlg.selected_report_id
-            report = self.db.get_report(report_id)
-            if report:
-                QMessageBox.information(self, "Отчет",
-                                        f"ID: {report[0]}\nНазвание: {report[1]}\nДата: {report[2]}")
+        QMessageBox.information(self, "Информация", "Функция списка отчетов временно недоступна")
 
     def on_font_size(self):
         QMessageBox.information(self, "Информация", "Функция изменения шрифта будет добавлена позже")
@@ -1230,10 +1010,6 @@ class ReportWindow(QMainWindow):
                                 "Разработчик: ...\n"
                                 "Telegram: @katwell1\n\n"
                                 "© 2026")
-
-    def open_environment_settings(self):
-        """Открыть настройки окружения (старый метод)"""
-        self.open_settings_window()
 
     def clear_all(self):
         self.clear_arrival_tab()
@@ -1272,15 +1048,22 @@ class ReportWindow(QMainWindow):
         self.workplaces_data.clear()
         self.clear_workplaces()
 
+    def refresh_comboboxes(self):
+        self.load_branches_to_combo(self.ui.comboBox_5)
+        self.load_branches_to_combo(self.ui.comboBox_6)
+        self.load_branches_to_combo(self.ui.comboBox_3)
+        self.load_branches_to_combo(self.ui.comboBox_4)
+        self.load_branches_to_combo(self.ui.comboBox_15)
+        self.load_branches_to_combo(self.ui.comboBox_14)
+        self.load_employees_to_combo(self.ui.comboBox_8)
+        self.load_employees_to_combo(self.ui.comboBox)
+        self.load_employees_to_combo(self.ui.comboBox_2)
+        self.load_employees_with_position(self.ui.comboBox_13)
+        self.load_distribution_equipment()
 
-# ========== ЗАПУСК ==========
+
 def main():
     app = QApplication(sys.argv)
-
-    if not os.path.exists(ui_path):
-        QMessageBox.critical(None, "Ошибка", f"Файл интерфейса не найден:\n{ui_path}")
-        return
-
     window = ReportWindow()
     window.show()
     sys.exit(app.exec())

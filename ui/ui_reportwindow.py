@@ -19,10 +19,9 @@ from PySide6.QtGui import (QAction, QBrush, QColor, QConicalGradient,
 from PySide6.QtWidgets import (QApplication, QComboBox, QDateEdit, QDateTimeEdit,
     QDoubleSpinBox, QFrame, QGridLayout, QGroupBox,
     QHeaderView, QLabel, QLineEdit, QMainWindow,
-    QMenu, QMenuBar, QPlainTextEdit, QProgressBar,
-    QPushButton, QSizePolicy, QSpinBox, QTabWidget,
-    QTableView, QTableWidget, QTableWidgetItem, QTextEdit,
-    QWidget)
+    QPlainTextEdit, QProgressBar, QPushButton, QSizePolicy,
+    QSpinBox, QTabWidget, QTableView, QTableWidget,
+    QTableWidgetItem, QTextEdit, QWidget)
 
 class Ui_reportWindow(object):
     def setupUi(self, reportWindow):
@@ -1015,42 +1014,6 @@ class Ui_reportWindow(object):
         self.progressBar.setGeometry(QRect(10, 0, 1891, 31))
         self.progressBar.setValue(24)
         reportWindow.setCentralWidget(self.centralwidget)
-        self.menubar = QMenuBar(reportWindow)
-        self.menubar.setObjectName(u"menubar")
-        self.menubar.setGeometry(QRect(0, 0, 1990, 33))
-        self.menu = QMenu(self.menubar)
-        self.menu.setObjectName(u"menu")
-        self.menu_2 = QMenu(self.menubar)
-        self.menu_2.setObjectName(u"menu_2")
-        self.menu_4 = QMenu(self.menubar)
-        self.menu_4.setObjectName(u"menu_4")
-        self.menu_5 = QMenu(self.menubar)
-        self.menu_5.setObjectName(u"menu_5")
-        self.menu_6 = QMenu(self.menubar)
-        self.menu_6.setObjectName(u"menu_6")
-        reportWindow.setMenuBar(self.menubar)
-
-        self.menubar.addAction(self.menu.menuAction())
-        self.menubar.addAction(self.menu_2.menuAction())
-        self.menubar.addAction(self.menu_4.menuAction())
-        self.menubar.addAction(self.menu_5.menuAction())
-        self.menubar.addAction(self.menu_6.menuAction())
-        self.menu.addSeparator()
-        self.menu.addSeparator()
-        self.menu.addSeparator()
-        self.menu.addAction(self.action_14)
-        self.menu.addAction(self.action_15)
-        self.menu.addAction(self.action_3)
-        self.menu.addSeparator()
-        self.menu.addAction(self.action_4)
-        self.menu.addSeparator()
-        self.menu.addAction(self.action_5)
-        self.menu.addSeparator()
-        self.menu_2.addAction(self.action_7)
-        self.menu_2.addAction(self.action_8)
-        self.menu_4.addAction(self.action_9)
-        self.menu_4.addAction(self.action_10)
-        self.menu_5.addAction(self.action_11)
 
         self.retranslateUi(reportWindow)
 
@@ -1188,10 +1151,5 @@ class Ui_reportWindow(object):
         self.label_38.setText(QCoreApplication.translate("reportWindow", u"<html><head/><body><p><span style=\" font-size:18pt;\">\u0411\u0410\u0417\u0410 \u0414\u0410\u041d\u041d\u042b\u0425 \u041f\u041e\u0421\u0422\u0423\u041f\u041b\u0415\u041d\u0418\u042f:</span></p><p><span style=\" font-size:18pt;\"><br/></span></p></body></html>", None))
         self.pushButton_16.setText(QCoreApplication.translate("reportWindow", u"\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u043f\u043e\u0437\u0438\u0446\u0438\u044e: >", None))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_2), QCoreApplication.translate("reportWindow", u"\u041f\u043e\u0441\u0442\u0443\u043f\u043b\u0435\u043d\u0438\u0435", None))
-        self.menu.setTitle(QCoreApplication.translate("reportWindow", u"\u0424\u0430\u0439\u043b", None))
-        self.menu_2.setTitle(QCoreApplication.translate("reportWindow", u"\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438", None))
-        self.menu_4.setTitle(QCoreApplication.translate("reportWindow", u"\u0421\u043f\u0440\u0430\u0432\u043a\u0430", None))
-        self.menu_5.setTitle(QCoreApplication.translate("reportWindow", u"\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0430 \u043e\u043a\u0440\u0443\u0436\u0435\u043d\u0438\u044f", None))
-        self.menu_6.setTitle(QCoreApplication.translate("reportWindow", u"\u041e\u0422\u041a\u0420\u042b\u0422\u042c \u0421\u0425\u0415\u041c\u0423", None))
     # retranslateUi
 

@@ -1,25 +1,55 @@
-import os
 import sqlite3
+import os
 from datetime import datetime
-
+import paths
 
 class DatabaseHandler:
     def __init__(self, db_path=None):
         if db_path is None:
-            # database_handler.py находится в python_files/database/
-            current_file = os.path.abspath(__file__)
-            # Путь к папке database
-            db_dir = os.path.dirname(current_file)
-            # Путь к company.db
-            db_path = os.path.join(db_dir, "company.db")
+            db_path = paths.get_db_file_path()
 
+        # Создаем директорию для БД если её нет
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
         self.db_path = db_path
         print(f"🔄 Подключение к БД: {db_path}")
         self.create_tables()
+        self.check_and_add_default_data()
 
-        # 👇 ВОТ ЭТУ СТРОКУ УДАЛИ ИЛИ ЗАКОММЕНТИРУЙ:
-        # self.add_test_data_if_empty()
+    def check_and_add_default_data(self):
+        """Проверяет и добавляет данные по умолчанию если БД пуста"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        # Проверяем есть ли пользователи
+        cursor.execute("SELECT COUNT(*) FROM users")
+        if cursor.fetchone()[0] == 0:
+            # Добавляем пользователя по умолчанию
+            cursor.execute("INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
+                           ("admin", "admin", "admin"))
+            print("✅ Добавлен пользователь admin")
+
+        # Проверяем есть ли филиалы
+        cursor.execute("SELECT COUNT(*) FROM branches")
+        if cursor.fetchone()[0] == 0:
+            # Добавляем тестовый филиал
+            cursor.execute("INSERT INTO branches (name, floors_count, address) VALUES (?, ?, ?)",
+                           ("Главный офис", 3, "г. Москва, ул. Ленина, 1"))
+            branch_id = cursor.lastrowid
+
+            # Добавляем тестового сотрудника
+            cursor.execute("""INSERT INTO employees (name_id, job_title, report_count, date_of_work, branch_id)
+                              VALUES (?, ?, ?, ?, ?)""",
+                           ("Иванов Иван Иванович", "Директор", 0, datetime.now().strftime("%Y-%m-%d"), branch_id))
+
+            # Добавляем тестовую комнату
+            cursor.execute("""INSERT INTO room (room_number, room_name, branch_id, floor, capacity)
+                              VALUES (?, ?, ?, ?, ?)""",
+                           ("101", "Кабинет директора", branch_id, 1, 5))
+
+            print("✅ Добавлены тестовые данные")
+
+        conn.commit()
+        conn.close()
 
     def get_connection(self):
         conn = sqlite3.connect(self.db_path)
@@ -36,8 +66,8 @@ class DatabaseHandler:
                        CREATE TABLE IF NOT EXISTS branches (
                                                                branch_id INTEGER PRIMARY KEY AUTOINCREMENT,
                                                                name TEXT NOT NULL,
-                                                               floors_count INTEGER NOT NULL,
-                                                               address TEXT NOT NULL
+                                                               floors_count INTEGER NOT NULL DEFAULT 1,
+                                                               address TEXT NOT NULL DEFAULT ''
                        )
                        ''')
 
@@ -47,7 +77,7 @@ class DatabaseHandler:
                                                                 worker_id INTEGER PRIMARY KEY AUTOINCREMENT,
                                                                 name_id TEXT NOT NULL,
                                                                 job_title TEXT NOT NULL,
-                                                                report_count INTEGER NOT NULL,
+                                                                report_count INTEGER NOT NULL DEFAULT 0,
                                                                 date_of_work TEXT NOT NULL,
                                                                 branch_id INTEGER,
                                                                 phone TEXT,
@@ -90,17 +120,17 @@ class DatabaseHandler:
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS equipment (
                                                                 equipment_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                                                                quantity INTEGER NOT NULL,
-                                                                category TEXT NOT NULL,
-                                                                type TEXT NOT NULL,
+                                                                quantity INTEGER NOT NULL DEFAULT 1,
+                                                                category TEXT NOT NULL DEFAULT '',
+                                                                type TEXT NOT NULL DEFAULT '',
                                                                 name TEXT NOT NULL,
                                                                 date_incoming TEXT NOT NULL,
-                                                                state_incoming INTEGER NOT NULL,
+                                                                state_incoming INTEGER NOT NULL DEFAULT 1,
                                                                 serial_number TEXT NOT NULL UNIQUE,
-                                                                supplier TEXT NOT NULL,
-                                                                price INTEGER NOT NULL,
-                                                                phone_supplier TEXT NOT NULL,
-                                                                email_supplier TEXT NOT NULL,
+                                                                supplier TEXT NOT NULL DEFAULT '',
+                                                                price INTEGER NOT NULL DEFAULT 0,
+                                                                phone_supplier TEXT NOT NULL DEFAULT '',
+                                                                email_supplier TEXT NOT NULL DEFAULT '',
                                                                 room_id INTEGER,
                                                                 branch_id INTEGER,
                                                                 status TEXT DEFAULT 'in_use',
@@ -162,6 +192,7 @@ class DatabaseHandler:
                        )
                        ''')
 
+        # Таблица карт этажей
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS floor_maps (
                                                                  map_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -173,7 +204,7 @@ class DatabaseHandler:
                            )
                        ''')
 
-        # Таблица для координат точек (маркеров) кабинетов на плане
+        # Таблица маркеров комнат
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS room_markers (
                                                                    marker_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -189,10 +220,9 @@ class DatabaseHandler:
 
         conn.commit()
         conn.close()
-        print("✅ Таблицы созданы!")
+        print("✅ Таблицы созданы/проверены!")
 
     # ========== МЕТОДЫ ДЛЯ ГРАФИКИ ==========
-
     def save_floor_map(self, branch_id, floor_num, img_path):
         """Сохраняет или обновляет путь к картинке плана этажа"""
         conn = self.get_connection()
@@ -262,7 +292,6 @@ class DatabaseHandler:
         print("✅ Карта удалена!")
 
     # ========== МЕТОДЫ ДЛЯ КОМНАТ ==========
-
     def get_rooms(self, branch_id=None):
         """Получение всех комнат филиала"""
         conn = self.get_connection()
@@ -432,11 +461,10 @@ class DatabaseHandler:
         return room
 
     # ========== МЕТОДЫ ДЛЯ ФИЛИАЛОВ ==========
-
     def get_all_branches(self):
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT branch_id, name, floors_count, address FROM branches")
+        cursor.execute("SELECT branch_id, name, floors_count, address FROM branches ORDER BY name")
         branches = cursor.fetchall()
         conn.close()
         return branches
@@ -475,7 +503,6 @@ class DatabaseHandler:
         conn.close()
 
     # ========== МЕТОДЫ ДЛЯ СОТРУДНИКОВ ==========
-
     def get_employees(self, branch_id=None):
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -533,7 +560,6 @@ class DatabaseHandler:
         return success
 
     # ========== МЕТОДЫ ДЛЯ ПОЛЬЗОВАТЕЛЕЙ ==========
-
     def get_users(self):
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -558,7 +584,6 @@ class DatabaseHandler:
         return success
 
     # ========== МЕТОДЫ ДЛЯ КОМПАНИИ ==========
-
     def get_company_name(self):
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -584,7 +609,6 @@ class DatabaseHandler:
             conn.close()
 
     # ========== МЕТОДЫ ДЛЯ ОБОРУДОВАНИЯ ==========
-
     def get_all_equipment(self):
         """Получение всего оборудования"""
         conn = self.get_connection()
@@ -673,7 +697,6 @@ class DatabaseHandler:
             conn.close()
 
     # ========== МЕТОДЫ ДЛЯ ОТЧЕТОВ ==========
-
     def add_report(self, report_data):
         """Добавление нового отчета"""
         conn = self.get_connection()
