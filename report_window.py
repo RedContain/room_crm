@@ -27,16 +27,11 @@ try:
     import platform
     import subprocess
 
-    # Функция для поиска шрифта с кириллицей
     def find_cyrillic_font():
-        """Ищет системный шрифт с поддержкой кириллицы"""
         system = platform.system()
-
-        # Список возможных путей к шрифтам в разных ОС
         font_paths = []
 
         if system == "Windows":
-            # Windows
             windows_dir = os.environ.get('WINDIR', 'C:\\Windows')
             font_paths = [
                 os.path.join(windows_dir, 'Fonts', 'arial.ttf'),
@@ -45,7 +40,7 @@ try:
                 os.path.join(windows_dir, 'Fonts', 'verdana.ttf'),
                 os.path.join(windows_dir, 'Fonts', 'tahoma.ttf'),
             ]
-        elif system == "Darwin":  # macOS
+        elif system == "Darwin":
             font_paths = [
                 '/Library/Fonts/Arial.ttf',
                 '/Library/Fonts/Times New Roman.ttf',
@@ -53,8 +48,7 @@ try:
                 '/Library/Fonts/Verdana.ttf',
                 '/System/Library/Fonts/Helvetica.ttc',
             ]
-        else:  # Linux
-            # Поиск шрифтов через fc-list если доступно
+        else:
             try:
                 result = subprocess.run(['fc-list', ':family', 'file'],
                                         capture_output=True, text=True, timeout=2)
@@ -68,7 +62,6 @@ try:
             except:
                 pass
 
-            # Стандартные пути Linux
             font_paths.extend([
                 '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
                 '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
@@ -76,28 +69,22 @@ try:
                 '/usr/share/fonts/truetype/arial/arial.ttf',
             ])
 
-        # Проверяем существование файлов
         for path in font_paths:
             if os.path.exists(path):
                 return path
-
-        # Если ничего не нашли, создаем временный файл со стандартным шрифтом?
         return None
 
-    # Регистрируем шрифт при импорте
     FONT_PATH = find_cyrillic_font()
     FONT_REGISTERED = False
-    FONT_NAME = "Helvetica"  # По умолчанию
+    FONT_NAME = "Helvetica"
 
     if FONT_PATH:
         try:
             pdfmetrics.registerFont(TTFont('CyrillicFont', FONT_PATH))
-            # Также регистрируем жирную версию если есть
             bold_path = FONT_PATH.replace('.ttf', 'b.ttf').replace('.ttc', 'b.ttc')
             if os.path.exists(bold_path):
                 pdfmetrics.registerFont(TTFont('CyrillicFont-Bold', bold_path))
             else:
-                # Используем тот же шрифт для жирного (ReportLab сделает faux bold)
                 pdfmetrics.registerFont(TTFont('CyrillicFont-Bold', FONT_PATH))
             FONT_REGISTERED = True
             FONT_NAME = "CyrillicFont"
@@ -121,11 +108,19 @@ except ImportError:
     print("⚠️ Модуль plane не найден, функция схем будет недоступна")
 
 SETTINGS_AVAILABLE = False
+SettingsWindowClass = None
 try:
-    from settings import MainWindow as SettingsWindow
+    import sys
+    import os
+    sys.path.insert(0, os.path.dirname(__file__))
+    import settings
+    SettingsWindowClass = settings.MainWindow
     SETTINGS_AVAILABLE = True
-except ImportError:
-    print("⚠️ Модуль settings не найден, функция настроек будет недоступна")
+    print(f"✅ Модуль settings загружен, путь: {settings.__file__}")
+except Exception as e:
+    print(f"⚠️ Ошибка при импорте settings: {e}")
+    import traceback
+    traceback.print_exc()
 
 
 class ConfirmationDialog(QDialog):
@@ -165,7 +160,6 @@ class SaveConfirmationDialog(QDialog):
 
 
 class ArrivalInfoDialog(QDialog):
-    """Диалог с подробной информацией о поступлении"""
     def __init__(self, arrival_data, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Информация о поступлении")
@@ -219,7 +213,6 @@ class ArrivalInfoDialog(QDialog):
 
 
 class ReportsListDialog(QDialog):
-    """Диалог для отображения полного списка отчетов (поступлений)"""
     def __init__(self, db, parent=None):
         super().__init__(parent)
         self.db = db
@@ -284,6 +277,7 @@ class ReportWindow(QMainWindow):
         self.room_equipment_model = None
         self.settings_window = None
         self.plane_window = None
+        self._settings_window = None
 
         self._ensure_extra_columns()
         self._ensure_arrivals_table()
@@ -347,6 +341,7 @@ class ReportWindow(QMainWindow):
             conn.close()
 
     def setup_notification_area(self):
+        """Создаёт область уведомлений и таймер"""
         self.notification_label = QLabel(self.ui.centralwidget)
         self.notification_label.setAlignment(Qt.AlignCenter)
         self.notification_label.setFixedSize(200, 20)
@@ -361,7 +356,14 @@ class ReportWindow(QMainWindow):
         """)
         self.notification_label.hide()
 
-        self.notification_timer = QTimer()
+        # Создаём таймер, если его нет или он удалён
+        if hasattr(self, 'notification_timer') and self.notification_timer is not None:
+            try:
+                self.notification_timer.stop()
+                self.notification_timer.deleteLater()
+            except:
+                pass
+        self.notification_timer = QTimer(self)
         self.notification_timer.setSingleShot(True)
         self.notification_timer.timeout.connect(self.notification_label.hide)
 
@@ -379,6 +381,23 @@ class ReportWindow(QMainWindow):
         self.update_notification_position()
 
     def show_notification(self, message, error=False):
+        """Показывает всплывающее уведомление с защитой от удалённого таймера"""
+        # Если окно скрыто или закрыто, не показываем
+        if not self.isVisible():
+            return
+
+        # Проверяем, существует ли таймер и не удалён ли он
+        if not hasattr(self, 'notification_timer') or self.notification_timer is None:
+            self.setup_notification_area()  # пересоздаём
+        else:
+            try:
+                # Пытаемся обратиться к таймеру – если объект удалён, будет RuntimeError
+                self.notification_timer.isActive()
+            except RuntimeError:
+                # Таймер был удалён – создаём заново
+                self.setup_notification_area()
+
+        # Теперь таймер точно существует
         if error:
             self.notification_label.setStyleSheet("""
                 QLabel {
@@ -545,24 +564,150 @@ class ReportWindow(QMainWindow):
         schema_action.triggered.connect(self.show_schema)
 
     def open_settings_window(self):
-        if not SETTINGS_AVAILABLE:
+        """Открывает окно настроек"""
+        if not SETTINGS_AVAILABLE or SettingsWindowClass is None:
             self.show_notification("Модуль настроек не найден", error=True)
             return
+
         try:
-            dialog = SettingsWindow()
-            dialog.exec()
-            self.refresh_comboboxes()
-            self.show_notification("Настройки обновлены")
+            # Проверяем, существует ли уже окно и не удалено ли оно
+            if hasattr(self, '_settings_window') and self._settings_window is not None:
+                try:
+                    if self._settings_window.isVisible():
+                        self._settings_window.raise_()
+                        self._settings_window.activateWindow()
+                        return
+                except RuntimeError:
+                    # Объект уже удалён, игнорируем и создаём новое окно
+                    self._settings_window = None
+
+            print("🔵 Создаем новое окно настроек...")
+
+            self._settings_window = SettingsWindowClass()
+            self._settings_window.setParent(None)
+
+            main_geo = self.geometry()
+            dialog_geo = self._settings_window.geometry()
+            x = main_geo.x() + (main_geo.width() - dialog_geo.width()) // 2
+            y = main_geo.y() + (main_geo.height() - dialog_geo.height()) // 2
+            self._settings_window.move(x, y)
+
+            # Подключаемся к сигналу destroyed (он сработает при удалении окна)
+            self._settings_window.destroyed.connect(self.refresh_all_data)
+
+            print("🟢 Показываем окно...")
+            self._settings_window.show()
+
         except Exception as e:
-            if "exec" not in str(e):
-                self.show_notification(f"Ошибка открытия настроек: {e}", error=True)
+            print(f"🔴 ОШИБКА: {e}")
+            import traceback
+            traceback.print_exc()
+            self.show_notification(f"Ошибка: {e}", error=True)
+
+    def refresh_all_data(self):
+        """Полностью перезагружает все данные в интерфейсе"""
+        print("🔄 Полная перезагрузка данных...")
+
+        # Перезагружаем филиалы
+        branches = self.db.get_all_branches()
+        print(f"   Загружено филиалов: {len(branches)}")
+
+        branch_combos = [
+            self.ui.comboBox_5,
+            self.ui.comboBox_19,
+            self.ui.comboBox_15,
+            self.ui.comboBox_14
+        ]
+
+        for combo in branch_combos:
+            if combo:
+                current_data = combo.currentData()
+                combo.clear()
+                combo.addItem("Выберите филиал", None)
+                for branch in branches:
+                    combo.addItem(branch[1], branch[0])
+                if current_data:
+                    index = combo.findData(current_data)
+                    if index >= 0:
+                        combo.setCurrentIndex(index)
+
+        # Перезагружаем сотрудников
+        employees = self.db.get_employees()
+        print(f"   Загружено сотрудников: {len(employees)}")
+        for emp in employees:
+            print(f"      - {emp[1]} (ID: {emp[0]})")
+
+        # Комбобоксы с сотрудниками (с должностью)
+        employee_combos_full = [
+            self.ui.comboBox_8,
+        ]
+
+        if hasattr(self.ui, 'comboBox'):
+            employee_combos_full.append(self.ui.comboBox)
+        if hasattr(self.ui, 'comboBox_2'):
+            employee_combos_full.append(self.ui.comboBox_2)
+
+        for combo in employee_combos_full:
+            if combo:
+                current_data = combo.currentData()
+                combo.clear()
+                combo.addItem("Выберите сотрудника", None)
+                for emp in employees:
+                    combo.addItem(f"{emp[1]} ({emp[2]})", emp[0])
+                if current_data:
+                    index = combo.findData(current_data)
+                    if index >= 0:
+                        combo.setCurrentIndex(index)
+                combo.update()
+                combo.repaint()
+
+        # Комбобокс только с ФИО (comboBox_13)
+        if hasattr(self.ui, 'comboBox_13'):
+            combo = self.ui.comboBox_13
+            current_data = combo.currentData()
+        combo.clear()
+        combo.addItem("Выберите сотрудника", None)
+        for emp in employees:
+            combo.addItem(emp[1], emp[0])
+        if current_data:
+            index = combo.findData(current_data)
+            if index >= 0:
+                combo.setCurrentIndex(index)
+        combo.update()
+        combo.repaint()
+        print("   comboBox_13 обновлён, элементов:", combo.count())
+
+        # Обновляем данные в таблицах
+        self.load_arrival_data()
+        self.load_distribution_equipment()
+
+        if self.current_room_id:
+            self.load_room_equipment(self.current_room_id)
+
+        # Принудительно обрабатываем события
+        QApplication.processEvents()
+
+        print("✅ Данные обновлены")
+        self.show_notification("Данные обновлены")
+
+        # Сбрасываем ссылку на окно настроек, так как оно уже уничтожено
+        self._settings_window = None
 
     def show_schema(self):
         if not PLANE_AVAILABLE:
             self.show_notification("Модуль схем не найден", error=True)
             return
         try:
+            if hasattr(self, 'plane_window') and self.plane_window is not None:
+                if self.plane_window.isVisible():
+                    self.plane_window.raise_()
+                    self.plane_window.activateWindow()
+                    return
+                else:
+                    self.plane_window = None
+
             self.plane_window = PlaneWindow()
+            self.plane_window.setParent(self, Qt.Window)
             self.plane_window.show()
         except Exception as e:
             self.show_notification(f"Ошибка открытия схемы: {e}", error=True)
@@ -980,19 +1125,11 @@ class ReportWindow(QMainWindow):
         try:
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write("=" * 50 + "\n")
-                f.write("ОТЧЕТ О ПОСТУПЛЕНИИ\n")
+                f.write("ВЫГРУЗКА ИЗ БАЗЫ ДАННЫХ\n")
                 f.write(f"Дата: {QDateTime.currentDateTime().toString('yyyy-MM-dd hh:mm:ss')}\n")
                 f.write("=" * 50 + "\n\n")
 
-                f.write("ДАННЫЕ ПОСТУПЛЕНИЯ:\n")
-                if hasattr(self.ui, 'lineEdit_5'):
-                    f.write(f"Название: {self.ui.lineEdit_5.text()}\n")
-                if hasattr(self.ui, 'lineEdit_6'):
-                    f.write(f"Номер приказа: {self.ui.lineEdit_6.text()}\n")
-                if hasattr(self.ui, 'textEdit_4'):
-                    f.write(f"Описание: {self.ui.textEdit_4.toPlainText()}\n")
-
-                f.write("\nПОЗИЦИИ:\n")
+                f.write("ПОЗИЦИИ:\n")
                 f.write("-" * 50 + "\n")
                 f.write(f"{'№':<4} {'Название':<20} {'Категория':<15} {'Кол-во':<8} {'Цена':<10}\n")
                 f.write("-" * 50 + "\n")
@@ -1011,7 +1148,7 @@ class ReportWindow(QMainWindow):
                         pass
 
                 f.write("-" * 50 + "\n")
-                f.write(f"ИТОГО: {total} руб.\n")
+                f.write(f"ИТОГО: {total:.2f} руб.\n")
 
             self.show_notification(f"Отчет сохранен: {file_path}")
             QMessageBox.information(self, "Успех", f"Отчет сохранен: {file_path}")
@@ -1019,7 +1156,6 @@ class ReportWindow(QMainWindow):
             self.show_notification(f"Не удалось сохранить: {e}", error=True)
 
     def export_arrival_pdf(self):
-        """Экспорт отчета о поступлении в PDF с поддержкой кириллицы"""
         if not PDF_AVAILABLE:
             self.show_notification("Библиотека ReportLab не установлена. Установите: pip install reportlab", error=True)
             return
@@ -1039,23 +1175,19 @@ class ReportWindow(QMainWindow):
             from reportlab.platypus import Table, TableStyle
             from reportlab.lib.units import mm
 
-            # Создаем PDF документ
             c = canvas.Canvas(file_path, pagesize=A4)
             width, height = A4
 
-            # Используем зарегистрированный шрифт или Helvetica по умолчанию
             global FONT_NAME, FONT_REGISTERED
 
-            # Заголовок
             if FONT_REGISTERED:
                 c.setFont(FONT_NAME, 16)
             else:
                 c.setFont("Helvetica", 16)
                 self.show_notification("Шрифт с кириллицей не найден, используется Helvetica", error=True)
 
-            c.drawString(30, height - 30, "Выгрузка базы данных предприятия")
+            c.drawString(30, height - 30, "ВЫГРУЗКА ИЗ БАЗЫ ДАННЫХ")
 
-            # Дата
             if FONT_REGISTERED:
                 c.setFont(FONT_NAME, 12)
             else:
@@ -1064,7 +1196,6 @@ class ReportWindow(QMainWindow):
 
             y = height - 80
 
-            # Заголовк таблицы
             if FONT_REGISTERED:
                 c.setFont(f"{FONT_NAME}-Bold" if FONT_REGISTERED else "Helvetica-Bold", 10)
             else:
@@ -1085,7 +1216,6 @@ class ReportWindow(QMainWindow):
 
             total_sum = 0
             for row in range(self.ui.tableWidget.rowCount()):
-                # Проверяем, не вышли ли мы за пределы страницы
                 if y < 50:
                     c.showPage()
                     y = height - 50
@@ -1094,7 +1224,6 @@ class ReportWindow(QMainWindow):
                     else:
                         c.setFont("Helvetica", 9)
 
-                # Получаем данные из таблицы
                 num = str(row+1)
                 name = self.ui.tableWidget.item(row, 1).text() if self.ui.tableWidget.item(row, 1) else ""
                 cat = self.ui.tableWidget.item(row, 2).text() if self.ui.tableWidget.item(row, 2) else ""
@@ -1109,7 +1238,6 @@ class ReportWindow(QMainWindow):
                 except:
                     sum_val = 0
 
-                # Обрезаем длинные строки
                 if len(name) > 25:
                     name = name[:22] + "..."
                 if len(cat) > 15:
@@ -1123,7 +1251,6 @@ class ReportWindow(QMainWindow):
                 c.drawString(440, y, f"{sum_val:.2f}")
                 y -= 15
 
-            # Итоговая сумма
             y -= 10
             if FONT_REGISTERED:
                 c.setFont(f"{FONT_NAME}-Bold" if FONT_REGISTERED else "Helvetica-Bold", 11)
@@ -1212,7 +1339,6 @@ class ReportWindow(QMainWindow):
         if hasattr(self.ui, 'spinBox_3'):
             self.ui.spinBox_3.valueChanged.connect(self.on_floor_changed_inventory)
 
-        # Настройка таблицы
         if hasattr(self.ui, 'tableView'):
             model = QStandardItemModel()
             model.setHorizontalHeaderLabels([
@@ -1236,7 +1362,6 @@ class ReportWindow(QMainWindow):
             self.ui.tableView.setColumnWidth(9, 150)
             self.ui.tableView.setColumnWidth(10, 100)
 
-        # Фильтры
         if hasattr(self.ui, 'comboBox_12'):
             self.ui.comboBox_12.currentIndexChanged.connect(self.apply_inventory_filters)
         if hasattr(self.ui, 'comboBox_11'):
@@ -1248,15 +1373,13 @@ class ReportWindow(QMainWindow):
         if hasattr(self.ui, 'lineEdit_22'):
             self.ui.lineEdit_22.textChanged.connect(self.apply_inventory_filters)
 
-        # Загружаем категории и типы
         self.load_categories_to_combo(self.ui.comboBox_12)
         self.load_types_to_combo(self.ui.comboBox_11)
 
-        # 👇 ВАЖНО: ПОДКЛЮЧАЕМ КНОПКИ
         if hasattr(self.ui, 'pushButton_11'):
-            self.ui.pushButton_11.clicked.connect(self.export_inventory_room_report_pdf)  # PDF по комнате
+            self.ui.pushButton_11.clicked.connect(self.export_inventory_room_report_pdf)
         if hasattr(self.ui, 'pushButton_14'):
-            self.ui.pushButton_14.clicked.connect(self.export_inventory_full_report_pdf)  # PDF по филиалу
+            self.ui.pushButton_14.clicked.connect(self.export_inventory_full_report_pdf)
 
     def on_branch_changed_inventory(self):
         branch_id = self.ui.comboBox_19.currentData() if hasattr(self.ui, 'comboBox_19') else None
@@ -1402,7 +1525,6 @@ class ReportWindow(QMainWindow):
             self.show_notification(f"Не удалось сохранить отчет: {e}", error=True)
 
     def export_inventory_room_report_pdf(self):
-        """Экспорт отчета по комнате в PDF с поддержкой кириллицы"""
         if not PDF_AVAILABLE:
             self.show_notification("Библиотека ReportLab не установлена", error=True)
             return
@@ -1433,7 +1555,6 @@ class ReportWindow(QMainWindow):
 
             global FONT_NAME, FONT_REGISTERED
 
-            # Заголовок
             if FONT_REGISTERED:
                 c.setFont(FONT_NAME, 16)
             else:
@@ -1442,7 +1563,6 @@ class ReportWindow(QMainWindow):
 
             c.drawString(30, height - 30, f"ИНВЕНТАРИЗАЦИЯ КОМНАТЫ: {room[1]}")
 
-            # Информация о комнате
             if FONT_REGISTERED:
                 c.setFont(FONT_NAME, 12)
             else:
@@ -1462,7 +1582,6 @@ class ReportWindow(QMainWindow):
             c.drawString(30, y, f"Дата: {QDateTime.currentDateTime().toString('dd.MM.yyyy hh:mm')}")
             y -= 25
 
-            # Заголовки таблицы
             if FONT_REGISTERED:
                 c.setFont(f"{FONT_NAME}-Bold" if FONT_REGISTERED else "Helvetica-Bold", 10)
             else:
@@ -1481,7 +1600,6 @@ class ReportWindow(QMainWindow):
             else:
                 c.setFont("Helvetica", 9)
 
-            # Получаем данные из модели
             model = self.ui.tableView.model()
             total_sum = 0
             visible_rows = 0
@@ -1511,7 +1629,6 @@ class ReportWindow(QMainWindow):
                         except:
                             sum_val = 0
 
-                        # Обрезаем длинные строки
                         if len(name) > 25:
                             name = name[:22] + "..."
                         if len(cat) > 15:
@@ -1525,7 +1642,6 @@ class ReportWindow(QMainWindow):
                         c.drawString(440, y, f"{sum_val:.2f}")
                         y -= 15
 
-            # Итог
             y -= 10
             if FONT_REGISTERED:
                 c.setFont(f"{FONT_NAME}-Bold" if FONT_REGISTERED else "Helvetica-Bold", 11)
@@ -1542,7 +1658,6 @@ class ReportWindow(QMainWindow):
             QMessageBox.critical(self, "Ошибка", f"Не удалось создать PDF:\n{str(e)}")
 
     def export_inventory_full_report_pdf(self):
-        """Экспорт полного отчета по филиалу в PDF с поддержкой кириллицы"""
         if not PDF_AVAILABLE:
             self.show_notification("Библиотека ReportLab не установлена", error=True)
             return
@@ -1575,7 +1690,6 @@ class ReportWindow(QMainWindow):
 
             global FONT_NAME, FONT_REGISTERED
 
-            # Заголовок
             if FONT_REGISTERED:
                 c.setFont(FONT_NAME, 16)
             else:
@@ -1584,7 +1698,6 @@ class ReportWindow(QMainWindow):
 
             c.drawString(30, page_height - 30, f"ПОЛНЫЙ ОТЧЕТ ПО ФИЛИАЛУ: {branch['name']}")
 
-            # Информация о филиале
             if FONT_REGISTERED:
                 c.setFont(FONT_NAME, 12)
             else:
@@ -1597,7 +1710,6 @@ class ReportWindow(QMainWindow):
             total_equipment = 0
             total_value = 0
 
-            # Проходим по этажам
             for floor in range(1, branch['floors_count'] + 1):
                 if y_position < 100:
                     c.showPage()
@@ -1607,7 +1719,6 @@ class ReportWindow(QMainWindow):
                     else:
                         c.setFont("Helvetica", 12)
 
-                # Заголовок этажа
                 if FONT_REGISTERED:
                     c.setFont(f"{FONT_NAME}-Bold" if FONT_REGISTERED else "Helvetica-Bold", 14)
                 else:
@@ -1626,7 +1737,6 @@ class ReportWindow(QMainWindow):
                     y_position -= 20
                     continue
 
-                # Проходим по комнатам
                 for room in rooms:
                     if y_position < 80:
                         c.showPage()
@@ -1636,7 +1746,6 @@ class ReportWindow(QMainWindow):
                         else:
                             c.setFont("Helvetica", 12)
 
-                    # Название комнаты
                     if FONT_REGISTERED:
                         c.setFont(f"{FONT_NAME}-Bold" if FONT_REGISTERED else "Helvetica-Bold", 11)
                     else:
@@ -1644,7 +1753,6 @@ class ReportWindow(QMainWindow):
                     c.drawString(30, y_position, f"Комната {room[1]} - {room[2]}")
                     y_position -= 15
 
-                    # Оборудование в комнате
                     conn = self.db.get_connection()
                     cursor = conn.cursor()
                     cursor.execute("""
@@ -1670,7 +1778,6 @@ class ReportWindow(QMainWindow):
                                 else:
                                     c.setFont("Helvetica", 8)
 
-                            # Обрезаем длинные названия
                             name = eq[0][:20] + "..." if len(eq[0]) > 20 else eq[0]
                             cat = eq[1][:10] + "..." if eq[1] and len(eq[1]) > 10 else (eq[1] or "")
                             typ = eq[2][:10] + "..." if eq[2] and len(eq[2]) > 10 else (eq[2] or "")
@@ -1696,7 +1803,6 @@ class ReportWindow(QMainWindow):
 
                 y_position -= 10
 
-            # Итоговая страница
             c.showPage()
             if FONT_REGISTERED:
                 c.setFont(f"{FONT_NAME}-Bold" if FONT_REGISTERED else "Helvetica-Bold", 14)
@@ -2256,18 +2362,71 @@ class ReportWindow(QMainWindow):
         self.load_distribution_equipment()
 
     def refresh_comboboxes(self):
-        self.load_branches_to_combo(self.ui.comboBox_5)
-        if hasattr(self.ui, 'comboBox_19'):
-            self.load_branches_to_combo(self.ui.comboBox_19)
-        self.load_branches_to_combo(self.ui.comboBox_15)
-        self.load_branches_to_combo(self.ui.comboBox_14)
-        self.load_employees_to_combo(self.ui.comboBox_8)
+        """Правильно перезагружает комбобоксы из БД"""
+        print("🔄 Обновляем комбобоксы из БД...")
+
+        # Перезагружаем филиалы
+        branches = self.db.get_all_branches()
+
+        # Список комбобоксов с филиалами
+        branch_combos = [
+            self.ui.comboBox_5,
+            self.ui.comboBox_19,
+            self.ui.comboBox_15,
+            self.ui.comboBox_14
+        ]
+
+        for combo in branch_combos:
+            if combo:
+                current_data = combo.currentData()
+                combo.clear()
+                combo.addItem("Выберите филиал", None)
+                for branch in branches:
+                    combo.addItem(branch[1], branch[0])
+                if current_data:
+                    index = combo.findData(current_data)
+                    if index >= 0:
+                        combo.setCurrentIndex(index)
+
+        # Перезагружаем сотрудников из БД!
+        employees = self.db.get_employees()
+
+        # Комбобоксы с сотрудниками (с должностью)
+        employee_combos = [
+            self.ui.comboBox_8,
+        ]
+
         if hasattr(self.ui, 'comboBox'):
-            self.load_employees_to_combo(self.ui.comboBox)
+            employee_combos.append(self.ui.comboBox)
         if hasattr(self.ui, 'comboBox_2'):
-            self.load_employees_to_combo(self.ui.comboBox_2)
-        self.load_employees_with_position(self.ui.comboBox_13)
-        self.load_distribution_equipment()
+            employee_combos.append(self.ui.comboBox_2)
+
+        for combo in employee_combos:
+            if combo:
+                current_data = combo.currentData()
+                combo.clear()
+                combo.addItem("Выберите сотрудника", None)
+                for emp in employees:
+                    combo.addItem(f"{emp[1]} ({emp[2]})", emp[0])
+                if current_data:
+                    index = combo.findData(current_data)
+                    if index >= 0:
+                        combo.setCurrentIndex(index)
+
+        # Комбобокс только с ФИО
+        if hasattr(self.ui, 'comboBox_13'):
+            combo = self.ui.comboBox_13
+            current_data = combo.currentData()
+            combo.clear()
+            combo.addItem("Выберите сотрудника", None)
+            for emp in employees:
+                combo.addItem(emp[1], emp[0])
+            if current_data:
+                index = combo.findData(current_data)
+                if index >= 0:
+                    combo.setCurrentIndex(index)
+
+        print(f"✅ Комбобоксы обновлены. Загружено сотрудников: {len(employees)}")
 
 
 def main():
