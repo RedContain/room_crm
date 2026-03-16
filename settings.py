@@ -1,5 +1,6 @@
 import sys
 import os
+from datetime import datetime
 
 # Добавляем путь к текущей папке
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -12,10 +13,8 @@ from PySide6.QtUiTools import QUiLoader
 
 # ========== ИМПОРТ НАШИХ МОДУЛЕЙ ==========
 import paths
-
-# ========== ИМПОРТ DatabaseHandler ==========
 from database_handler import DatabaseHandler
-import paths
+from ui.ui_view import Ui_MainWindow  # импортируем сгенерированный класс
 
 class EmployeesDialog(QDialog):
     def __init__(self, db, branch_id, branch_name, parent=None):
@@ -425,31 +424,14 @@ class RoomsDialog(QDialog):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.ui = None
-        self.db = DatabaseHandler(paths.get_db_file_path())
+        self.ui = Ui_MainWindow()
+        self.ui.setupUi(self)
+        self.db = DatabaseHandler()
         self.current_branch_id = None
         self.original_company_name = ""
         self.changes_made = False
 
-        self.load_ui()
-        self.setup_connections()
-        self.load_initial_data()
-        self.showMaximized()
-
-    def load_ui(self):
-        loader = QUiLoader()
-        ui_file_path = paths.get_ui_path("UI_diagramms/View.ui")
-        ui_file = QFile(ui_file_path)
-        if not ui_file.open(QIODevice.ReadOnly):
-            QMessageBox.critical(self, "Ошибка", f"Не удалось открыть файл интерфейса:\n{ui_file_path}")
-            sys.exit(1)
-        self.ui = loader.load(ui_file, self)
-        ui_file.close()
-        if not self.ui:
-            QMessageBox.critical(self, "Ошибка", "Не удалось загрузить интерфейс")
-            sys.exit(1)
-        self.setCentralWidget(self.ui.centralwidget)
-
+        # Сохраняем ссылки на виджеты (используем self.ui)
         self.company_name_edit = self.ui.lineEdit
         self.branches_spin = self.ui.spinBox
         self.branches_list = self.ui.listWidget
@@ -459,20 +441,22 @@ class MainWindow(QMainWindow):
         self.employees_spin = self.ui.spinBox_3
         self.floors_spin = self.ui.spinBox_4
         self.rooms_spin = self.ui.spinBox_2
-        self.total_branches_label = self.ui.label_12
+        self.total_branches_label = None  # нет в UI
         self.save_branch_count_btn = self.ui.pushButton_6
-        self.edit_branch_btn = self.ui.pushButton
+        # Убираем self.edit_branch_btn - его нет в UI
         self.delete_branch_btn = self.ui.pushButton_3
         self.save_branch_btn = self.ui.pushButton_2
         self.save_all_btn = self.ui.pushButton_4
         self.reset_all_btn = self.ui.pushButton_5
         self.employees_btn = self.ui.toolButton_2
         self.rooms_btn = self.ui.toolButton_4
-        self.users_combo = self.ui.comboBox_3
-        self.current_pass_edit = self.ui.lineEdit_3
-        self.new_pass_edit = self.ui.lineEdit_4
 
+        # Изначально группа редактирования отключена
         self.branch_group.setEnabled(False)
+
+        self.setup_connections()
+        self.load_initial_data()
+        self.showMaximized()
 
     def setup_connections(self):
         self.company_name_edit.textChanged.connect(self.on_change)
@@ -483,7 +467,7 @@ class MainWindow(QMainWindow):
 
         self.save_branch_count_btn.clicked.connect(self.save_branches_count)
         self.branches_list.itemClicked.connect(self.on_branch_selected)
-        self.edit_branch_btn.clicked.connect(lambda: self.branch_group.setEnabled(True))
+        # Убираем подключение edit_branch_btn
         self.save_branch_btn.clicked.connect(self.save_branch)
         self.delete_branch_btn.clicked.connect(self.delete_branch)
         self.employees_btn.clicked.connect(self.open_employees_dialog)
@@ -499,7 +483,6 @@ class MainWindow(QMainWindow):
         self.company_name_edit.setText(company_name)
         self.original_company_name = company_name
         self.load_branches()
-        self.load_users()
 
     def load_branches(self):
         self.branches_list.clear()
@@ -509,13 +492,6 @@ class MainWindow(QMainWindow):
             item.setData(Qt.UserRole, branch[0])
             self.branches_list.addItem(item)
         self.branches_spin.setValue(len(branches))
-        self.total_branches_label.setText(f"Всего филиалов: {len(branches)}")
-
-    def load_users(self):
-        self.users_combo.clear()
-        users = self.db.get_users()
-        for user in users:
-            self.users_combo.addItem(user[0])
 
     def save_branches_count(self):
         current = self.branches_list.count()
@@ -526,6 +502,9 @@ class MainWindow(QMainWindow):
             self.load_branches()
             self.changes_made = False
             QMessageBox.information(self, "Успех", f"Добавлено {target - current} филиалов")
+        elif target < current:
+            QMessageBox.warning(self, "Внимание",
+                                "Для уменьшения количества филиалов удалите лишние вручную (кнопка 'Удалить Филиал')")
 
     def on_branch_selected(self, item):
         self.current_branch_id = item.data(Qt.UserRole)
@@ -534,6 +513,7 @@ class MainWindow(QMainWindow):
             self.branch_name_edit.setText(branch[1])
             self.floors_spin.setValue(branch[2])
             self.branch_address_edit.setText(branch[3] or "")
+            # Автоматически включаем группу при выборе филиала
             self.branch_group.setEnabled(True)
             employees = self.db.get_employees(self.current_branch_id)
             rooms = self.db.get_rooms(self.current_branch_id)
@@ -549,6 +529,7 @@ class MainWindow(QMainWindow):
             return
         self.db.update_branch(self.current_branch_id, name, self.floors_spin.value(),
                               self.branch_address_edit.text().strip())
+        # Обновляем название в списке
         for i in range(self.branches_list.count()):
             item = self.branches_list.item(i)
             if item.data(Qt.UserRole) == self.current_branch_id:
@@ -594,18 +575,6 @@ class MainWindow(QMainWindow):
                 self.db.save_company_name(company_name)
             if self.current_branch_id:
                 self.save_branch()
-            current_count = self.branches_list.count()
-            target_count = self.branches_spin.value()
-            if target_count != current_count:
-                self.save_branches_count()
-            current_user = self.users_combo.currentText()
-            new_pass = self.new_pass_edit.text().strip()
-            if new_pass and current_user:
-                username = current_user.split()[0] if '(' in current_user else current_user
-                if self.db.change_password(username, new_pass):
-                    QMessageBox.information(self, "Успех", "Пароль изменен")
-                    self.current_pass_edit.clear()
-                    self.new_pass_edit.clear()
             self.changes_made = False
             QMessageBox.information(self, "Успех", "Все изменения сохранены!")
         except Exception as e:
@@ -621,8 +590,6 @@ class MainWindow(QMainWindow):
         self.load_initial_data()
         self.branch_group.setEnabled(False)
         self.current_branch_id = None
-        self.current_pass_edit.clear()
-        self.new_pass_edit.clear()
         self.changes_made = False
 
 

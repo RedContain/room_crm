@@ -18,22 +18,19 @@ def get_db_file_path():
     return os.path.join(db_dir, "company.db")
 
 def get_ui_path(filename):
-    """Возвращает путь к UI файлу"""
     base_path = get_base_path()
 
     # Проверяем несколько возможных расположений
     possible_paths = [
-        os.path.join(base_path, "UI_diagramms", filename),
+        os.path.join(base_path, "UI_diagramms", filename),  # здесь уже есть UI_diagramms
         os.path.join(base_path, filename),
         os.path.join(base_path, "python_files", filename),
-        os.path.join(os.path.dirname(base_path), "UI_diagramms", filename)
     ]
 
     for path in possible_paths:
         if os.path.exists(path):
             return path
 
-    # Если не нашли, возвращаем путь по умолчанию
     return os.path.join(base_path, "UI_diagramms", filename)
 
 def get_maps_dir():
