@@ -18,15 +18,15 @@ from PySide6.QtGui import (QAction, QBrush, QColor, QConicalGradient,
     QTransform)
 from PySide6.QtWidgets import (QApplication, QCheckBox, QFrame, QGridLayout,
     QGroupBox, QLabel, QLineEdit, QListWidget,
-    QListWidgetItem, QMainWindow, QMenu, QMenuBar,
-    QPushButton, QSizePolicy, QSpinBox, QToolButton,
-    QWidget)
+    QListWidgetItem, QMainWindow, QPushButton, QSizePolicy,
+    QSpinBox, QToolButton, QWidget)
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         if not MainWindow.objectName():
             MainWindow.setObjectName(u"MainWindow")
-        MainWindow.resize(1903, 954)
+        MainWindow.resize(984, 891)
+        MainWindow.setStyleSheet(u"")
         self.action = QAction(MainWindow)
         self.action.setObjectName(u"action")
         self.action_2 = QAction(MainWindow)
@@ -49,7 +49,7 @@ class Ui_MainWindow(object):
         self.centralwidget.setObjectName(u"centralwidget")
         self.groupBox = QGroupBox(self.centralwidget)
         self.groupBox.setObjectName(u"groupBox")
-        self.groupBox.setGeometry(QRect(0, 30, 1881, 851))
+        self.groupBox.setGeometry(QRect(0, 0, 981, 851))
         self.gridLayoutWidget = QWidget(self.groupBox)
         self.gridLayoutWidget.setObjectName(u"gridLayoutWidget")
         self.gridLayoutWidget.setGeometry(QRect(10, 20, 131, 41))
@@ -63,7 +63,7 @@ class Ui_MainWindow(object):
 
         self.gridLayoutWidget_2 = QWidget(self.groupBox)
         self.gridLayoutWidget_2.setObjectName(u"gridLayoutWidget_2")
-        self.gridLayoutWidget_2.setGeometry(QRect(140, 20, 771, 41))
+        self.gridLayoutWidget_2.setGeometry(QRect(140, 20, 831, 41))
         self.gridLayout_2 = QGridLayout(self.gridLayoutWidget_2)
         self.gridLayout_2.setObjectName(u"gridLayout_2")
         self.gridLayout_2.setContentsMargins(0, 0, 0, 0)
@@ -118,11 +118,11 @@ class Ui_MainWindow(object):
         self.groupBox_3 = QGroupBox(self.groupBox)
         self.groupBox_3.setObjectName(u"groupBox_3")
         self.groupBox_3.setEnabled(True)
-        self.groupBox_3.setGeometry(QRect(500, 110, 1371, 301))
+        self.groupBox_3.setGeometry(QRect(500, 110, 471, 321))
         self.frame = QFrame(self.groupBox_3)
         self.frame.setObjectName(u"frame")
         self.frame.setEnabled(True)
-        self.frame.setGeometry(QRect(10, 20, 1351, 271))
+        self.frame.setGeometry(QRect(10, 20, 451, 291))
         font = QFont()
         font.setKerning(True)
         self.frame.setFont(font)
@@ -141,7 +141,7 @@ class Ui_MainWindow(object):
 
         self.gridLayoutWidget_6 = QWidget(self.frame)
         self.gridLayoutWidget_6.setObjectName(u"gridLayoutWidget_6")
-        self.gridLayoutWidget_6.setGeometry(QRect(130, 10, 781, 41))
+        self.gridLayoutWidget_6.setGeometry(QRect(130, 10, 311, 41))
         self.gridLayout_6 = QGridLayout(self.gridLayoutWidget_6)
         self.gridLayout_6.setObjectName(u"gridLayout_6")
         self.gridLayout_6.setContentsMargins(0, 0, 0, 0)
@@ -149,11 +149,6 @@ class Ui_MainWindow(object):
         self.lineEdit_2.setObjectName(u"lineEdit_2")
 
         self.gridLayout_6.addWidget(self.lineEdit_2, 0, 0, 1, 1)
-
-        self.toolButton_3 = QToolButton(self.gridLayoutWidget_6)
-        self.toolButton_3.setObjectName(u"toolButton_3")
-
-        self.gridLayout_6.addWidget(self.toolButton_3, 0, 1, 1, 1)
 
         self.gridLayoutWidget_7 = QWidget(self.frame)
         self.gridLayoutWidget_7.setObjectName(u"gridLayoutWidget_7")
@@ -168,10 +163,10 @@ class Ui_MainWindow(object):
 
         self.pushButton_3 = QPushButton(self.frame)
         self.pushButton_3.setObjectName(u"pushButton_3")
-        self.pushButton_3.setGeometry(QRect(920, 20, 221, 24))
+        self.pushButton_3.setGeometry(QRect(10, 260, 221, 24))
         self.pushButton_2 = QPushButton(self.frame)
         self.pushButton_2.setObjectName(u"pushButton_2")
-        self.pushButton_2.setGeometry(QRect(1220, 240, 121, 24))
+        self.pushButton_2.setGeometry(QRect(230, 260, 211, 24))
         self.gridLayoutWidget_11 = QWidget(self.frame)
         self.gridLayoutWidget_11.setObjectName(u"gridLayoutWidget_11")
         self.gridLayoutWidget_11.setGeometry(QRect(10, 100, 121, 51))
@@ -207,7 +202,7 @@ class Ui_MainWindow(object):
 
         self.gridLayoutWidget_15 = QWidget(self.frame)
         self.gridLayoutWidget_15.setObjectName(u"gridLayoutWidget_15")
-        self.gridLayoutWidget_15.setGeometry(QRect(130, 50, 781, 51))
+        self.gridLayoutWidget_15.setGeometry(QRect(130, 50, 311, 51))
         self.gridLayout_15 = QGridLayout(self.gridLayoutWidget_15)
         self.gridLayout_15.setObjectName(u"gridLayout_15")
         self.gridLayout_15.setContentsMargins(0, 0, 0, 0)
@@ -218,7 +213,7 @@ class Ui_MainWindow(object):
 
         self.gridLayoutWidget_10 = QWidget(self.frame)
         self.gridLayoutWidget_10.setObjectName(u"gridLayoutWidget_10")
-        self.gridLayoutWidget_10.setGeometry(QRect(130, 100, 91, 51))
+        self.gridLayoutWidget_10.setGeometry(QRect(130, 100, 95, 51))
         self.gridLayout_10 = QGridLayout(self.gridLayoutWidget_10)
         self.gridLayout_10.setObjectName(u"gridLayout_10")
         self.gridLayout_10.setContentsMargins(0, 0, 0, 0)
@@ -229,7 +224,7 @@ class Ui_MainWindow(object):
 
         self.gridLayoutWidget_9 = QWidget(self.frame)
         self.gridLayoutWidget_9.setObjectName(u"gridLayoutWidget_9")
-        self.gridLayoutWidget_9.setGeometry(QRect(130, 150, 91, 51))
+        self.gridLayoutWidget_9.setGeometry(QRect(130, 150, 95, 51))
         self.gridLayout_9 = QGridLayout(self.gridLayoutWidget_9)
         self.gridLayout_9.setObjectName(u"gridLayout_9")
         self.gridLayout_9.setContentsMargins(0, 0, 0, 0)
@@ -240,7 +235,7 @@ class Ui_MainWindow(object):
 
         self.gridLayoutWidget_13 = QWidget(self.frame)
         self.gridLayoutWidget_13.setObjectName(u"gridLayoutWidget_13")
-        self.gridLayoutWidget_13.setGeometry(QRect(130, 200, 91, 51))
+        self.gridLayoutWidget_13.setGeometry(QRect(130, 200, 95, 51))
         self.gridLayout_13 = QGridLayout(self.gridLayoutWidget_13)
         self.gridLayout_13.setObjectName(u"gridLayout_13")
         self.gridLayout_13.setContentsMargins(0, 0, 0, 0)
@@ -284,34 +279,11 @@ class Ui_MainWindow(object):
 
         self.pushButton_4 = QPushButton(self.centralwidget)
         self.pushButton_4.setObjectName(u"pushButton_4")
-        self.pushButton_4.setGeometry(QRect(1530, 890, 351, 24))
+        self.pushButton_4.setGeometry(QRect(0, 860, 831, 24))
         self.pushButton_5 = QPushButton(self.centralwidget)
         self.pushButton_5.setObjectName(u"pushButton_5")
-        self.pushButton_5.setGeometry(QRect(1370, 890, 161, 24))
+        self.pushButton_5.setGeometry(QRect(830, 860, 151, 24))
         MainWindow.setCentralWidget(self.centralwidget)
-        self.menuBar = QMenuBar(MainWindow)
-        self.menuBar.setObjectName(u"menuBar")
-        self.menuBar.setGeometry(QRect(0, 0, 1903, 33))
-        self.menu_4 = QMenu(self.menuBar)
-        self.menu_4.setObjectName(u"menu_4")
-        self.menu_5 = QMenu(self.menuBar)
-        self.menu_5.setObjectName(u"menu_5")
-        self.menu = QMenu(self.menuBar)
-        self.menu.setObjectName(u"menu")
-        self.menu_2 = QMenu(self.menuBar)
-        self.menu_2.setObjectName(u"menu_2")
-        MainWindow.setMenuBar(self.menuBar)
-
-        self.menuBar.addAction(self.menu.menuAction())
-        self.menuBar.addAction(self.menu_4.menuAction())
-        self.menuBar.addAction(self.menu_5.menuAction())
-        self.menuBar.addAction(self.menu_2.menuAction())
-        self.menu_4.addSeparator()
-        self.menu_4.addAction(self.action_7)
-        self.menu_4.addAction(self.action_8)
-        self.menu_4.addAction(self.action_9)
-        self.menu_5.addAction(self.action_5)
-        self.menu_5.addAction(self.actionTelegram)
 
         self.retranslateUi(MainWindow)
 
@@ -338,7 +310,6 @@ class Ui_MainWindow(object):
         self.groupBox_3.setTitle(QCoreApplication.translate("MainWindow", u"\u0420\u0435\u0434\u0430\u043a\u0442\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u0435 \u0444\u0438\u043b\u0438\u0430\u043b\u043e\u0432\\\u043e\u0442\u0434\u0435\u043b\u043e\u0432", None))
         self.label_3.setText(QCoreApplication.translate("MainWindow", u"\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435 \u0444\u0438\u043b\u0438\u0430\u043b\u0430:", None))
         self.lineEdit_2.setText(QCoreApplication.translate("MainWindow", u"\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435 \u043e\u0442\u0434\u0435\u043b\u0430\\\u0444\u0438\u043b\u0438\u0430\u043b\u0430", None))
-        self.toolButton_3.setText(QCoreApplication.translate("MainWindow", u"info", None))
         self.label_11.setText(QCoreApplication.translate("MainWindow", u"\u0410\u0434\u0440\u0435\u0441:", None))
         self.pushButton_3.setText(QCoreApplication.translate("MainWindow", u" \u0423\u0434\u0430\u043b\u0438\u0442\u044c \u0424\u0438\u043b\u0438\u0430\u043b", None))
         self.pushButton_2.setText(QCoreApplication.translate("MainWindow", u"\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c", None))
@@ -348,11 +319,7 @@ class Ui_MainWindow(object):
         self.toolButton_2.setText(QCoreApplication.translate("MainWindow", u"\u0423\u043a\u0430\u0437\u0430\u0442\u044c \u0441\u043e\u0442\u0440\u0443\u0434\u043d\u0438\u043a\u043e\u0432", None))
         self.toolButton_4.setText(QCoreApplication.translate("MainWindow", u"\u0423\u043a\u0430\u0437\u0430\u0442\u044c \u043a\u043e\u043c\u043d\u0430\u0442\u044b", None))
         self.checkBox_2.setText(QCoreApplication.translate("MainWindow", u"\u041f\u043e\u0434\u0432\u0430\u043b\u044c\u043d\u043e\u0435 \u043f\u043e\u043c\u0435\u0449\u0435\u043d\u0438\u0435", None))
-        self.pushButton_4.setText(QCoreApplication.translate("MainWindow", u"\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u0438 \u0437\u0430\u043a\u0440\u044b\u0442\u044c", None))
-        self.pushButton_5.setText(QCoreApplication.translate("MainWindow", u"\u0421\u0431\u0440\u043e\u0441\u0438\u0442\u044c \u0432\u0441\u0451", None))
-        self.menu_4.setTitle(QCoreApplication.translate("MainWindow", u"\u041e \u043f\u0440\u043e\u0433\u0440\u0430\u043c\u043c\u0435", None))
-        self.menu_5.setTitle(QCoreApplication.translate("MainWindow", u"\u0410\u0432\u0442\u043e\u0440", None))
-        self.menu.setTitle(QCoreApplication.translate("MainWindow", u"\u0413\u043b\u0430\u0432\u043d\u043e\u0435 \u043c\u0435\u043d\u044e", None))
-        self.menu_2.setTitle(QCoreApplication.translate("MainWindow", u"\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u043e\u0442\u0447\u0435\u0442\u043d\u043e\u0441\u0442\u044c", None))
+        self.pushButton_4.setText(QCoreApplication.translate("MainWindow", u"\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u0432\u0441\u0435 \u0438\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u044f", None))
+        self.pushButton_5.setText(QCoreApplication.translate("MainWindow", u"\u0421\u0431\u0440\u043e\u0441\u0438\u0442\u044c \u0432\u0441\u0435 \u043d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438", None))
     # retranslateUi
 

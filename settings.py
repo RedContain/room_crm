@@ -7,7 +7,8 @@ if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 
 from PySide6.QtWidgets import *
-from PySide6.QtCore import Qt, QDate
+from PySide6.QtCore import Qt, QDate, QEvent
+from PySide6.QtGui import QKeyEvent
 import paths
 from database_handler import DatabaseHandler
 from ui.ui_view import Ui_MainWindow
@@ -73,7 +74,6 @@ class EmployeesDialog(QDialog):
             self.table.setItem(i, 2, QTableWidgetItem(emp[2]))
             self.table.setItem(i, 3, QTableWidgetItem(str(emp[3])))
             self.table.setItem(i, 4, QTableWidgetItem(emp[4]))
-        print(f"[EmployeesDialog] Загружено сотрудников: {len(employees)}")
 
     def on_row_selected(self, row, column):
         id_item = self.table.item(row, 0)
@@ -100,7 +100,6 @@ class EmployeesDialog(QDialog):
         employee_id = self.db.add_employee(name, job, date, self.branch_id)
         QMessageBox.information(self, "Успех", f"Сотрудник добавлен с ID: {employee_id}")
 
-        # Очищаем поля
         self.name_edit.clear()
         self.job_edit.clear()
         self.date_edit.setDate(QDate.currentDate())
@@ -109,18 +108,11 @@ class EmployeesDialog(QDialog):
         self.delete_btn.setEnabled(False)
         self.add_btn.setText("➕ Добавить")
 
-        # Перезагружаем список в текущем диалоге
         self.load_employees()
-
-        # Принудительно обрабатываем события, чтобы БД точно успела
         QApplication.processEvents()
 
-        # Обновляем все открытые диалоги комнат через главное окно
         if self.parent() and hasattr(self.parent(), 'refresh_all_rooms_dialogs'):
-            print("[EmployeesDialog] Вызываем refresh_all_rooms_dialogs у родителя")
             self.parent().refresh_all_rooms_dialogs()
-        else:
-            print("[EmployeesDialog] Родитель не имеет метода refresh_all_rooms_dialogs")
 
     def update_employee(self):
         if not self.selected_employee_id:
@@ -195,7 +187,6 @@ class RoomsDialog(QDialog):
         form_group = QGroupBox("Характеристики комнаты")
         form_layout = QGridLayout(form_group)
 
-        # Поля формы (как в исходном коде, оставляем без изменений)
         form_layout.addWidget(QLabel("Номер комнаты:"), 0, 0)
         self.number_edit = QLineEdit()
         form_layout.addWidget(self.number_edit, 0, 1)
@@ -268,53 +259,39 @@ class RoomsDialog(QDialog):
         btn_layout.addWidget(close_btn)
         layout.addLayout(btn_layout)
 
-        # Загружаем начальные данные
         self.load_responsible_employees()
         self.load_rooms()
 
-        # Регистрируем себя в главном окне для получения обновлений
         if self.parent() and hasattr(self.parent(), 'register_rooms_dialog'):
             self.parent().register_rooms_dialog(self)
 
     def closeEvent(self, event):
-        # Удаляем себя из списка при закрытии
         if self.parent() and hasattr(self.parent(), 'unregister_rooms_dialog'):
             self.parent().unregister_rooms_dialog(self)
         super().closeEvent(event)
 
     def load_responsible_employees(self):
-        """Загружает список сотрудников в комбобокс ответственных"""
         try:
-            # Сохраняем текущее выделение
             current_data = self.responsible_combo.currentData()
-
             self.responsible_combo.blockSignals(True)
             self.responsible_combo.clear()
             self.responsible_combo.addItem("Не назначен", None)
 
             employees = self.db.get_employees(self.branch_id)
-            print(f"[RoomsDialog] Загружено сотрудников: {len(employees)} для branch_id {self.branch_id}")
             for emp in employees:
-                print(f"    - {emp[1]} (ID: {emp[0]})")
                 self.responsible_combo.addItem(f"{emp[1]} ({emp[2]})", emp[0])
 
-            # Восстанавливаем выделение
             if current_data:
                 index = self.responsible_combo.findData(current_data)
                 if index >= 0:
                     self.responsible_combo.setCurrentIndex(index)
 
             self.responsible_combo.blockSignals(False)
-
-            # Принудительно обновляем виджет
-            self.responsible_combo.update()
-            self.responsible_combo.repaint()
-            print("[RoomsDialog] Комбобокс ответственных обновлён")
         except Exception as e:
             print(f"[RoomsDialog] Ошибка загрузки сотрудников: {e}")
 
     def load_rooms(self):
-        rooms = self.db.get_rooms(self.branch_id)
+        rooms = self.db.get_rooms_by_branch(self.branch_id)
         self.table.setRowCount(len(rooms))
         for i, room in enumerate(rooms):
             self.table.setItem(i, 0, QTableWidgetItem(str(room[0])))
@@ -326,7 +303,12 @@ class RoomsDialog(QDialog):
             self.table.setItem(i, 6, QTableWidgetItem(str(room[6] or "0")))
             self.table.setItem(i, 7, QTableWidgetItem(str(room[7] or "0")))
             self.table.setItem(i, 8, QTableWidgetItem(str(room[8] or "0.0")))
-            responsible_name = room[11] if len(room) > 11 and room[11] else "Не назначен"
+
+            responsible_name = "Не назначен"
+            if len(room) > 9 and room[9]:
+                responsible = self.db.get_employee_by_id(room[9])
+                if responsible:
+                    responsible_name = responsible[1]
             self.table.setItem(i, 9, QTableWidgetItem(responsible_name))
 
     def on_row_selected(self, row, column):
@@ -341,7 +323,6 @@ class RoomsDialog(QDialog):
             self.chairs_spin.setValue(int(self.table.item(row, 6).text() or "0"))
             self.sockets_spin.setValue(int(self.table.item(row, 7).text() or "0"))
             self.area_spin.setValue(float(self.table.item(row, 8).text() or "0.0"))
-            # Устанавливаем ответственного
             responsible_text = self.table.item(row, 9).text()
             found = False
             for idx in range(self.responsible_combo.count()):
@@ -466,9 +447,7 @@ class RoomsDialog(QDialog):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setAttribute(Qt.WA_DeleteOnClose)  # <-- добавить эту строку
-        self.ui = Ui_MainWindow()
-        self.ui.setupUi(self)
+        self.setAttribute(Qt.WA_DeleteOnClose)
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
         self.db = DatabaseHandler()
@@ -476,10 +455,8 @@ class MainWindow(QMainWindow):
         self.original_company_name = ""
         self.changes_made = False
 
-        # Список открытых диалогов комнат
         self.open_rooms_dialogs = []
 
-        # Сохраняем ссылки на виджеты
         self.company_name_edit = self.ui.lineEdit
         self.branches_spin = self.ui.spinBox
         self.branches_list = self.ui.listWidget
@@ -503,6 +480,9 @@ class MainWindow(QMainWindow):
         self.load_initial_data()
         self.showMaximized()
 
+        self.branches_list.setFocusPolicy(Qt.StrongFocus)
+        self.branches_list.installEventFilter(self)
+
     def setup_connections(self):
         self.company_name_edit.textChanged.connect(self.on_change)
         self.branches_spin.valueChanged.connect(self.on_change)
@@ -517,27 +497,39 @@ class MainWindow(QMainWindow):
         self.employees_btn.clicked.connect(self.open_employees_dialog)
         self.rooms_btn.clicked.connect(self.open_rooms_dialog)
         self.save_all_btn.clicked.connect(self.save_all_changes)
-        self.reset_all_btn.clicked.connect(self.reset_all)
+        self.reset_all_btn.clicked.connect(self.hard_reset_database)
+
+        self.reset_all_btn.setShortcut(Qt.Key_F5)
+        self.reset_all_btn.setToolTip("Полный сброс базы данных (F5)")
+
+    def eventFilter(self, obj, event):
+        if obj == self.branches_list and event.type() == QEvent.KeyPress:
+            if event.key() == Qt.Key_Delete:
+                self.delete_branch()
+                return True
+        return super().eventFilter(obj, event)
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_F5:
+            self.hard_reset_database()
+            event.accept()
+        elif event.key() == Qt.Key_Delete and self.branches_list.hasFocus():
+            self.delete_branch()
+            event.accept()
+        else:
+            super().keyPressEvent(event)
 
     def register_rooms_dialog(self, dialog):
-        """Регистрирует открытый диалог комнат"""
         if dialog not in self.open_rooms_dialogs:
             self.open_rooms_dialogs.append(dialog)
-            print(f"[MainWindow] Диалог комнат зарегистрирован, всего: {len(self.open_rooms_dialogs)}")
 
     def unregister_rooms_dialog(self, dialog):
-        """Удаляет диалог из списка при закрытии"""
         if dialog in self.open_rooms_dialogs:
             self.open_rooms_dialogs.remove(dialog)
-            print(f"[MainWindow] Диалог комнат удален, осталось: {len(self.open_rooms_dialogs)}")
 
     def refresh_all_rooms_dialogs(self):
-        """Обновляет комбобоксы во всех открытых диалогах комнат"""
-        print(f"[MainWindow] Обновление {len(self.open_rooms_dialogs)} диалогов комнат")
-        for i, dialog in enumerate(self.open_rooms_dialogs):
-            print(f"  Обновляем диалог {i+1}: {dialog}")
+        for dialog in self.open_rooms_dialogs:
             dialog.load_responsible_employees()
-        # Принудительно обновляем интерфейс
         QApplication.processEvents()
 
     def on_change(self):
@@ -558,6 +550,19 @@ class MainWindow(QMainWindow):
             self.branches_list.addItem(item)
         self.branches_spin.setValue(len(branches))
 
+    def refresh_current_branch_data(self):
+        if self.current_branch_id:
+            branch = self.db.get_branch(self.current_branch_id)
+            if branch:
+                self.branch_name_edit.setText(branch[1])
+                self.floors_spin.setValue(branch[2])
+                self.branch_address_edit.setText(branch[3] or "")
+
+                employees = self.db.get_employees(self.current_branch_id)
+                rooms = self.db.get_rooms_by_branch(self.current_branch_id)
+                self.employees_spin.setValue(len(employees))
+                self.rooms_spin.setValue(len(rooms))
+
     def save_branches_count(self):
         current = self.branches_list.count()
         target = self.branches_spin.value()
@@ -569,21 +574,12 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Успех", f"Добавлено {target - current} филиалов")
         elif target < current:
             QMessageBox.warning(self, "Внимание",
-                                "Для уменьшения количества филиалов удалите лишние вручную")
+                                "Для уменьшения количества филиалов удалите лишние вручную (выберите филиал и нажмите Delete или кнопку Удалить)")
 
     def on_branch_selected(self, item):
         self.current_branch_id = item.data(Qt.UserRole)
-        branch = self.db.get_branch(self.current_branch_id)
-        if branch:
-            self.branch_name_edit.setText(branch[1])
-            self.floors_spin.setValue(branch[2])
-            self.branch_address_edit.setText(branch[3] or "")
-            self.branch_group.setEnabled(True)
-
-            employees = self.db.get_employees(self.current_branch_id)
-            rooms = self.db.get_rooms(self.current_branch_id)
-            self.employees_spin.setValue(len(employees))
-            self.rooms_spin.setValue(len(rooms))
+        self.refresh_current_branch_data()
+        self.branch_group.setEnabled(True)
 
     def save_branch(self):
         if not self.current_branch_id:
@@ -592,28 +588,39 @@ class MainWindow(QMainWindow):
         if not name:
             QMessageBox.warning(self, "Ошибка", "Введите название филиала")
             return
+
         self.db.update_branch(self.current_branch_id, name,
                               self.floors_spin.value(),
                               self.branch_address_edit.text().strip())
+
         for i in range(self.branches_list.count()):
             item = self.branches_list.item(i)
             if item.data(Qt.UserRole) == self.current_branch_id:
                 item.setText(name)
                 break
-        QMessageBox.information(self, "Успех", "Филиал сохранен")
+
+        QMessageBox.information(self, "Успех", f"Филиал сохранен (этажей: {self.floors_spin.value()})")
 
     def delete_branch(self):
         if not self.current_branch_id:
+            QMessageBox.warning(self, "Ошибка", "Сначала выберите филиал для удаления")
             return
+
         reply = QMessageBox.question(self, "Подтверждение",
-                                     "Удалить филиал? Все связанные данные будут потеряны.",
+                                     "Удалить филиал? Все связанные данные (сотрудники, комнаты, оборудование) будут потеряны.",
                                      QMessageBox.Yes | QMessageBox.No)
         if reply == QMessageBox.Yes:
             self.db.delete_branch(self.current_branch_id)
             self.load_branches()
             self.branch_group.setEnabled(False)
             self.current_branch_id = None
+            self.branch_name_edit.clear()
+            self.branch_address_edit.clear()
+            self.floors_spin.setValue(1)
+            self.employees_spin.setValue(0)
+            self.rooms_spin.setValue(0)
             self.changes_made = True
+            QMessageBox.information(self, "Успех", "Филиал удален")
 
     def open_employees_dialog(self):
         if self.current_branch_id:
@@ -623,7 +630,6 @@ class MainWindow(QMainWindow):
             dialog.exec()
 
     def on_employees_dialog_closed(self):
-        # Обновляем счетчик сотрудников
         if self.current_branch_id:
             employees = self.db.get_employees(self.current_branch_id)
             self.employees_spin.setValue(len(employees))
@@ -637,7 +643,7 @@ class MainWindow(QMainWindow):
 
     def on_rooms_dialog_closed(self):
         if self.current_branch_id:
-            rooms = self.db.get_rooms(self.current_branch_id)
+            rooms = self.db.get_rooms_by_branch(self.current_branch_id)
             self.rooms_spin.setValue(len(rooms))
 
     def save_all_changes(self):
@@ -652,17 +658,60 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", f"Не удалось сохранить изменения: {str(e)}")
 
-    def reset_all(self):
-        if self.changes_made:
-            reply = QMessageBox.question(self, "Подтверждение",
-                                         "Сбросить все изменения? Несохраненные данные будут потеряны.",
-                                         QMessageBox.Yes | QMessageBox.No)
-            if reply == QMessageBox.No:
-                return
-        self.load_initial_data()
-        self.branch_group.setEnabled(False)
-        self.current_branch_id = None
-        self.changes_made = False
+    def hard_reset_database(self):
+        """Полный сброс базы данных"""
+        reply = QMessageBox.question(self, "Полный сброс",
+                                     "⚠️ ВНИМАНИЕ! Это действие полностью очистит базу данных!\n\n"
+                                     "Будут удалены:\n"
+                                     "- Все филиалы\n"
+                                     "- Все сотрудники\n"
+                                     "- Все комнаты\n"
+                                     "- Все оборудование\n"
+                                     "- Все отчеты\n\n"
+                                     "Будут добавлены тестовые данные.\n\n"
+                                     "Вы уверены?",
+                                     QMessageBox.Yes | QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            reply2 = QMessageBox.question(self, "Подтверждение",
+                                          "Последнее предупреждение!\n"
+                                          "Все данные будут безвозвратно удалены!\n\n"
+                                          "Продолжить?",
+                                          QMessageBox.Yes | QMessageBox.No)
+            if reply2 == QMessageBox.Yes:
+                # Закрываем все открытые диалоги комнат
+                for dialog in self.open_rooms_dialogs[:]:  # Используем срез для копии списка
+                    try:
+                        dialog.close()
+                    except:
+                        pass
+                self.open_rooms_dialogs.clear()
+
+                # Закрываем все другие открытые диалоги
+                for widget in QApplication.topLevelWidgets():
+                    if isinstance(widget, QDialog) and widget != self and widget.isVisible():
+                        try:
+                            widget.close()
+                        except:
+                            pass
+
+                # Выполняем сброс базы данных
+                success = self.db.hard_reset_database()
+
+                if success:
+                    # Полностью перезагружаем интерфейс
+                    self.load_initial_data()
+                    self.current_branch_id = None
+                    self.branch_group.setEnabled(False)
+                    self.branch_name_edit.clear()
+                    self.branch_address_edit.clear()
+                    self.floors_spin.setValue(1)
+                    self.employees_spin.setValue(0)
+                    self.rooms_spin.setValue(0)
+                    self.changes_made = False
+
+                    QMessageBox.information(self, "Успех", "База данных полностью сброшена!\nДобавлены тестовые данные.")
+                else:
+                    QMessageBox.critical(self, "Ошибка", "Не удалось выполнить сброс базы данных!")
 
 
 def main():

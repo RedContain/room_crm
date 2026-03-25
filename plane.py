@@ -9,9 +9,9 @@ if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 
 from PySide6 import QtWidgets, QtGui
-from PySide6.QtCore import Qt, QFile, QIODevice, QDateTime, QPointF
-from PySide6.QtGui import QPixmap, QPen, QBrush, QColor, QFont, QStandardItemModel, QStandardItem
-from PySide6.QtWidgets import QMessageBox, QFileDialog, QGraphicsScene, QGraphicsPixmapItem, QGraphicsEllipseItem, QVBoxLayout, QLabel, QTableView, QHeaderView, QAbstractScrollArea, QGraphicsTextItem
+from PySide6.QtCore import Qt, QFile, QIODevice, QDateTime, QPointF, QRectF
+from PySide6.QtGui import QPixmap, QPen, QBrush, QColor, QFont, QStandardItemModel, QStandardItem, QPainterPath
+from PySide6.QtWidgets import QMessageBox, QFileDialog, QGraphicsScene, QGraphicsPixmapItem, QGraphicsEllipseItem, QVBoxLayout, QLabel, QTableView, QHeaderView, QAbstractScrollArea, QGraphicsTextItem, QGraphicsItem
 from PySide6.QtUiTools import QUiLoader
 
 # ========== ИМПОРТ НАШИХ МОДУЛЕЙ ==========
@@ -33,16 +33,11 @@ try:
     import platform
     import subprocess
 
-    # Функция для поиска шрифта с кириллицей
     def find_cyrillic_font():
-        """Ищет системный шрифт с поддержкой кириллицы"""
         system = platform.system()
-
-        # Список возможных путей к шрифтам в разных ОС
         font_paths = []
 
         if system == "Windows":
-            # Windows
             windows_dir = os.environ.get('WINDIR', 'C:\\Windows')
             font_paths = [
                 os.path.join(windows_dir, 'Fonts', 'arial.ttf'),
@@ -51,7 +46,7 @@ try:
                 os.path.join(windows_dir, 'Fonts', 'verdana.ttf'),
                 os.path.join(windows_dir, 'Fonts', 'tahoma.ttf'),
             ]
-        elif system == "Darwin":  # macOS
+        elif system == "Darwin":
             font_paths = [
                 '/Library/Fonts/Arial.ttf',
                 '/Library/Fonts/Times New Roman.ttf',
@@ -59,8 +54,7 @@ try:
                 '/Library/Fonts/Verdana.ttf',
                 '/System/Library/Fonts/Helvetica.ttc',
             ]
-        else:  # Linux
-            # Поиск шрифтов через fc-list если доступно
+        else:
             try:
                 result = subprocess.run(['fc-list', ':family', 'file'],
                                         capture_output=True, text=True, timeout=2)
@@ -74,7 +68,6 @@ try:
             except:
                 pass
 
-            # Стандартные пути Linux
             font_paths.extend([
                 '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
                 '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
@@ -82,26 +75,21 @@ try:
                 '/usr/share/fonts/truetype/arial/arial.ttf',
             ])
 
-        # Проверяем существование файлов
         for path in font_paths:
             if os.path.exists(path):
                 return path
-
         return None
 
-    # Регистрируем шрифт при импорте
     FONT_PATH = find_cyrillic_font()
     FONT_REGISTERED = False
 
     if FONT_PATH:
         try:
             pdfmetrics.registerFont(TTFont('CyrillicFont', FONT_PATH))
-            # Также регистрируем жирную версию если есть
             bold_path = FONT_PATH.replace('.ttf', 'b.ttf').replace('.ttc', 'b.ttc')
             if os.path.exists(bold_path):
                 pdfmetrics.registerFont(TTFont('CyrillicFont-Bold', bold_path))
             else:
-                # Используем тот же шрифт для жирного
                 pdfmetrics.registerFont(TTFont('CyrillicFont-Bold', FONT_PATH))
             FONT_REGISTERED = True
             print(f"✅ Зарегистрирован шрифт: {FONT_PATH}")
@@ -115,6 +103,25 @@ except ImportError as e:
     print(f"⚠️ reportlab не установлен, функции PDF будут недоступны. Ошибка: {e}")
 
 
+class CustomEllipseItem(QGraphicsEllipseItem):
+    """Кастомный эллипс с поддержкой тултипа"""
+    def __init__(self, x, y, w, h, room_id, room_number, room_name):
+        super().__init__(x, y, w, h)
+        self.room_id = room_id
+        self.room_number = room_number
+        self.room_name = room_name
+        self.setToolTip(f"{room_number} - {room_name}")
+        self.setAcceptHoverEvents(True)
+
+    def hoverEnterEvent(self, event):
+        self.setBrush(QBrush(QColor(255, 255, 0, 200)))
+        super().hoverEnterEvent(event)
+
+    def hoverLeaveEvent(self, event):
+        self.setBrush(QBrush(QColor(0, 255, 0, 180)))
+        super().hoverLeaveEvent(event)
+
+
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
@@ -124,12 +131,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self.current_map_id = None
         self.current_scene = None
         self.current_scene_display = None
-        self.marker_items = []
+        self.marker_items = []  # Список точек (эллипсы)
+        self.marker_texts = []  # Список текстовых меток
         self.marker_items_display = []
+        self.marker_texts_display = []
 
         self.is_edit_mode = False
         self.pending_marker = None
         self.selected_room_id = None
+
+        # Константы для размера точек (фиксированный размер в пикселях)
+        self.MARKER_SIZE = 20  # Размер точки
+        self.MARKER_RADIUS = 10  # Радиус точки
 
         # ВЫЗЫВАЕМ ВСЕ МЕТОДЫ ИНИЦИАЛИЗАЦИИ
         self.setup_ui()
@@ -139,14 +152,21 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def setup_ui(self):
         """Настройка пользовательского интерфейса"""
-        # Создаем статус-бар, если его нет
+        # Настраиваем спинбоксы для этажей (поддерживаем минусовые этажи)
+        if hasattr(self.ui, 'spinBox'):
+            self.ui.spinBox.setRange(-3, 50)
+            self.ui.spinBox.setToolTip("Этаж: -3 (подвал) до 50")
+        if hasattr(self.ui, 'spinBox_2'):
+            self.ui.spinBox_2.setRange(-3, 50)
+            self.ui.spinBox_2.setToolTip("Этаж: -3 (подвал) до 50")
+
+        # Создаем статус-бар
         if not hasattr(self.ui, 'statusbar') or self.ui.statusbar is None:
             self.statusBar()
 
         self.status_label = QtWidgets.QLabel()
         self.status_label.setStyleSheet("QLabel { color: green; font-weight: bold; padding: 2px; }")
 
-        # Добавляем в статус-бар
         if hasattr(self.ui, 'statusbar'):
             self.ui.statusbar.addPermanentWidget(self.status_label)
         else:
@@ -163,7 +183,6 @@ class MainWindow(QtWidgets.QMainWindow):
         if not hasattr(self.ui, 'tableView_2'):
             return
 
-        # Создаем модель для таблицы оборудования
         self.equipment_model = QStandardItemModel()
         self.equipment_model.setHorizontalHeaderLabels([
             "Название", "Категория", "Тип", "Кол-во", "Цена",
@@ -171,26 +190,23 @@ class MainWindow(QtWidgets.QMainWindow):
         ])
         self.ui.tableView_2.setModel(self.equipment_model)
 
-        # Настройка горизонтальной прокрутки
         self.ui.tableView_2.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.ui.tableView_2.setSizeAdjustPolicy(QAbstractScrollArea.AdjustToContents)
 
-        # Настройка колонок
         header = self.ui.tableView_2.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.Interactive)
         header.setStretchLastSection(False)
 
-        # Задаём примерную ширину колонок
-        self.ui.tableView_2.setColumnWidth(0, 200)  # Название
-        self.ui.tableView_2.setColumnWidth(1, 150)  # Категория
-        self.ui.tableView_2.setColumnWidth(2, 150)  # Тип
-        self.ui.tableView_2.setColumnWidth(3, 80)   # Кол-во
-        self.ui.tableView_2.setColumnWidth(4, 100)  # Цена
-        self.ui.tableView_2.setColumnWidth(5, 150)  # Серийный №
-        self.ui.tableView_2.setColumnWidth(6, 120)  # Инв. №
-        self.ui.tableView_2.setColumnWidth(7, 150)  # Дата поступления
-        self.ui.tableView_2.setColumnWidth(8, 200)  # Производитель
-        self.ui.tableView_2.setColumnWidth(9, 100)  # Статус
+        self.ui.tableView_2.setColumnWidth(0, 200)
+        self.ui.tableView_2.setColumnWidth(1, 150)
+        self.ui.tableView_2.setColumnWidth(2, 150)
+        self.ui.tableView_2.setColumnWidth(3, 80)
+        self.ui.tableView_2.setColumnWidth(4, 100)
+        self.ui.tableView_2.setColumnWidth(5, 150)
+        self.ui.tableView_2.setColumnWidth(6, 120)
+        self.ui.tableView_2.setColumnWidth(7, 150)
+        self.ui.tableView_2.setColumnWidth(8, 200)
+        self.ui.tableView_2.setColumnWidth(9, 100)
 
         self.ui.tableView_2.setSelectionBehavior(QTableView.SelectRows)
 
@@ -205,7 +221,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def connect_signals(self):
         """Подключение сигналов к слотам"""
-        # Вкладка настроек (редактирование)
         if hasattr(self.ui, 'comboBox'):
             self.ui.comboBox.currentIndexChanged.connect(self.on_branch_changed_settings)
         if hasattr(self.ui, 'spinBox'):
@@ -219,7 +234,6 @@ class MainWindow(QtWidgets.QMainWindow):
         if hasattr(self.ui, 'pushButton_8'):
             self.ui.pushButton_8.clicked.connect(self.on_save_map_clicked)
 
-        # Вкладка просмотра
         if hasattr(self.ui, 'comboBox_2'):
             self.ui.comboBox_2.currentIndexChanged.connect(self.on_branch_changed_display)
         if hasattr(self.ui, 'spinBox_2'):
@@ -233,14 +247,12 @@ class MainWindow(QtWidgets.QMainWindow):
         """Загрузка филиалов в комбобоксы"""
         branches = self.db.get_all_branches()
 
-        # Заполняем первый комбобокс (настройки)
         if hasattr(self.ui, 'comboBox'):
             self.ui.comboBox.clear()
             self.ui.comboBox.addItem("Выберите филиал", None)
             for branch in branches:
                 self.ui.comboBox.addItem(branch['name'], branch['branch_id'])
 
-        # Заполняем второй комбобокс (просмотр)
         if hasattr(self.ui, 'comboBox_2'):
             self.ui.comboBox_2.clear()
             self.ui.comboBox_2.addItem("Выберите филиал", None)
@@ -262,6 +274,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.clear_graphics_view(getattr(self.ui, 'graphicsView', None))
         self.current_scene = None
         self.marker_items = []
+        self.marker_texts = []
         self.current_map_id = None
         if hasattr(self.ui, 'spinBox'):
             self.ui.spinBox.setValue(1)
@@ -275,6 +288,15 @@ class MainWindow(QtWidgets.QMainWindow):
             branch_id = self.ui.comboBox.currentData()
         if branch_id:
             self.display_map_settings(branch_id, floor)
+
+    def get_floor_display_text(self, floor):
+        """Возвращает текст для отображения этажа"""
+        if floor < 0:
+            return f"Подвал {abs(floor)}"
+        elif floor == 0:
+            return "Цокольный этаж"
+        else:
+            return f"Этаж {floor}"
 
     def load_rooms_to_table(self):
         """Загрузка комнат в таблицу (настройки)"""
@@ -295,24 +317,39 @@ class MainWindow(QtWidgets.QMainWindow):
         rooms = self.db.get_rooms_by_branch_and_floor(branch_id, floor)
 
         model = QtGui.QStandardItemModel()
-        model.setHorizontalHeaderLabels(['ID', 'Номер', 'Название', 'Вместимость'])
+        model.setHorizontalHeaderLabels(['ID', 'Номер', 'Название', 'Вместимость', 'Привязана'])
+
+        # Получаем уже привязанные комнаты
+        map_info, markers = self.db.get_map_data(branch_id, floor)
+        bound_rooms = set()
+        if markers:
+            for marker in markers:
+                bound_rooms.add(marker[2])  # room_id
 
         for room in rooms:
             id_item = QtGui.QStandardItem(str(room['room_id']))
             num_item = QtGui.QStandardItem(room['room_number'])
             name_item = QtGui.QStandardItem(room['room_name'])
             capacity_item = QtGui.QStandardItem(str(room['capacity']))
+            bound_item = QtGui.QStandardItem("✓ Привязана" if room['room_id'] in bound_rooms else "")
+            bound_item.setEditable(False)
 
             id_item.setEditable(False)
             num_item.setEditable(False)
             name_item.setEditable(False)
             capacity_item.setEditable(False)
 
-            model.appendRow([id_item, num_item, name_item, capacity_item])
+            # Если комната уже привязана, делаем её серой
+            if room['room_id'] in bound_rooms:
+                for item in [id_item, num_item, name_item, capacity_item, bound_item]:
+                    item.setForeground(QtGui.QBrush(Qt.gray))
+
+            model.appendRow([id_item, num_item, name_item, capacity_item, bound_item])
 
         self.ui.tableView.setModel(model)
         self.ui.tableView.setColumnHidden(0, True)
-        self.show_status(f"Загружено {len(rooms)} комнат")
+        self.ui.tableView.setColumnWidth(4, 100)
+        self.show_status(f"Загружено {len(rooms)} комнат, привязано {len(bound_rooms)}")
 
     def on_table_double_click(self, index):
         """Обработчик двойного клика по таблице комнат (привязка точки)"""
@@ -325,29 +362,45 @@ class MainWindow(QtWidgets.QMainWindow):
 
         model = self.ui.tableView.model()
         row = index.row()
-        room_id = model.data(model.index(row, 0))
+        room_id = int(model.data(model.index(row, 0)))
         room_number = model.data(model.index(row, 1))
         room_name = model.data(model.index(row, 2))
+        bound_status = model.data(model.index(row, 4))
+
+        # Проверяем, не привязана ли уже комната
+        if bound_status and "Привязана" in bound_status:
+            self.show_status(f"Комната {room_number} уже привязана к другой точке!", True)
+            return
 
         if self.pending_marker:
-            self.pending_marker.setBrush(QBrush(QColor(0, 255, 0, 180)))
-            self.pending_marker.setData(0, room_id)
-            self.pending_marker.setData(1, room_number)
-            self.pending_marker.setData(2, room_name)
+            # Обновляем точку
+            self.pending_marker.room_id = room_id
+            self.pending_marker.room_number = room_number
+            self.pending_marker.room_name = room_name
             self.pending_marker.setToolTip(f"{room_number} - {room_name}")
+            self.pending_marker.setBrush(QBrush(QColor(0, 255, 0, 180)))
 
-            if self.current_scene:
-                font = QFont("Arial", 8)
-                text = self.current_scene.addText(f"{room_number}", font)
-                text.setPos(self.pending_marker.rect().center().x() + 20,
-                            self.pending_marker.rect().center().y() - 10)
-                text.setData(0, room_id)
-                text.setToolTip(f"{room_number} - {room_name}")
+            # Обновляем текст
+            if self.pending_marker_text:
+                self.pending_marker_text.setPlainText(room_number)
+                self.pending_marker_text.setToolTip(f"{room_number} - {room_name}")
 
-                self.marker_items.append(self.pending_marker)
-                self.marker_items.append(text)
+            # Обновляем модель таблицы (отмечаем комнату как привязанную)
+            bound_item = QStandardItem("✓ Привязана")
+            bound_item.setEditable(False)
+            bound_item.setForeground(QtGui.QBrush(Qt.gray))
+            model.setItem(row, 4, bound_item)
+            for col in range(4):
+                item = model.item(row, col)
+                if item:
+                    item.setForeground(QtGui.QBrush(Qt.gray))
+
+            self.marker_items.append(self.pending_marker)
+            if self.pending_marker_text:
+                self.marker_texts.append(self.pending_marker_text)
 
             self.pending_marker = None
+            self.pending_marker_text = None
             self.show_status(f"Точка привязана к комнате {room_number} - {room_name}")
 
     def on_load_map_clicked(self):
@@ -400,7 +453,12 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.ui.pushButton_2.setText("Редактировать схему")
             if hasattr(self.ui, 'graphicsView'):
                 self.ui.graphicsView.setCursor(Qt.ArrowCursor)
+            if self.pending_marker and self.current_scene:
+                self.current_scene.removeItem(self.pending_marker)
+                if self.pending_marker_text:
+                    self.current_scene.removeItem(self.pending_marker_text)
             self.pending_marker = None
+            self.pending_marker_text = None
             self.show_status("Режим редактирования выключен")
 
     def on_delete_map_clicked(self):
@@ -419,7 +477,6 @@ class MainWindow(QtWidgets.QMainWindow):
         dialog.exec()
 
         if dialog.clickedButton() == delete_all_btn:
-            # Получаем путь к файлу перед удалением из БД
             conn = self.db.get_connection()
             cursor = conn.cursor()
             cursor.execute("SELECT image_path FROM floor_maps WHERE map_id = ?", (self.current_map_id,))
@@ -437,6 +494,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.current_map_id = None
             self.current_scene = None
             self.marker_items = []
+            self.marker_texts = []
+            self.load_rooms_to_table()
             self.show_status("Схема и точки удалены")
 
         elif dialog.clickedButton() == delete_markers_btn:
@@ -448,6 +507,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if hasattr(self.ui, 'spinBox'):
                 floor = self.ui.spinBox.value()
             self.display_map_settings(branch_id, floor)
+            self.load_rooms_to_table()
             self.show_status("Все точки удалены")
 
     def on_save_map_clicked(self):
@@ -455,20 +515,21 @@ class MainWindow(QtWidgets.QMainWindow):
         if not self.current_map_id or not self.current_scene:
             return
 
+        # Удаляем старые маркеры
+        self.db.delete_markers_by_map(self.current_map_id)
+
         saved_count = 0
         for item in self.marker_items:
-            if isinstance(item, QGraphicsEllipseItem):
-                room_id = item.data(0)
-                if room_id:
-                    rect = item.rect()
-                    center = item.mapToScene(rect.center())
-                    x, y = center.x(), center.y()
-
-                    self.db.add_marker(self.current_map_id, room_id, x, y)
-                    saved_count += 1
+            if hasattr(item, 'room_id') and item.room_id:
+                rect = item.rect()
+                center = item.mapToScene(rect.center())
+                x, y = center.x(), center.y()
+                self.db.add_marker(self.current_map_id, item.room_id, x, y)
+                saved_count += 1
 
         if saved_count > 0:
             self.show_status(f"Сохранено {saved_count} точек")
+            self.load_rooms_to_table()
         else:
             self.show_status("Нет точек для сохранения", True)
 
@@ -492,28 +553,39 @@ class MainWindow(QtWidgets.QMainWindow):
         self.create_temp_marker(scene_pos.x(), scene_pos.y())
 
     def create_temp_marker(self, x, y):
-        """Создание временного маркера"""
+        """Создание временного маркера (фиксированного размера)"""
         if not self.current_scene:
             return
 
         if self.pending_marker and self.current_scene:
             self.current_scene.removeItem(self.pending_marker)
+            if self.pending_marker_text:
+                self.current_scene.removeItem(self.pending_marker_text)
+
+        size = self.MARKER_SIZE
+        radius = self.MARKER_RADIUS
 
         pen = QPen(Qt.blue)
-        pen.setWidth(3)
+        pen.setWidth(2)
         brush = QBrush(QColor(0, 0, 255, 180))
 
-        # Увеличиваем размер точек (было 16, стало 24)
-        ellipse = QGraphicsEllipseItem(x - 12, y - 12, 24, 24)
+        # Создаем временную точку
+        ellipse = CustomEllipseItem(x - radius, y - radius, size, size, None, None, None)
         ellipse.setPen(pen)
         ellipse.setBrush(brush)
         ellipse.setFlag(QGraphicsEllipseItem.ItemIsMovable, True)
         ellipse.setFlag(QGraphicsEllipseItem.ItemIsSelectable, True)
-        ellipse.setData(0, None)
         ellipse.setToolTip("Новая точка - выберите комнату в таблице")
+
+        # Создаем временный текст
+        font = QFont("Arial", 9)
+        text = self.current_scene.addText("?", font)
+        text.setPos(x + radius + 2, y - radius)
+        text.setDefaultTextColor(Qt.blue)
 
         self.current_scene.addItem(ellipse)
         self.pending_marker = ellipse
+        self.pending_marker_text = text
 
         self.show_status("Точка поставлена, выберите комнату в таблице двойным кликом")
 
@@ -532,7 +604,6 @@ class MainWindow(QtWidgets.QMainWindow):
         scene = QGraphicsScene()
         self.current_scene = scene
 
-        # Проверяем существование файла
         if not os.path.exists(map_info['image_path']):
             self.show_status("Файл изображения не найден", True)
             return
@@ -546,32 +617,31 @@ class MainWindow(QtWidgets.QMainWindow):
         scene.addItem(pixmap_item)
 
         self.marker_items = []
+        self.marker_texts = []
+        size = self.MARKER_SIZE
+        radius = self.MARKER_RADIUS
+
         for marker in markers:
             x, y, room_id, room_name, room_number = marker
 
             pen = QPen(Qt.green)
-            pen.setWidth(3)
+            pen.setWidth(2)
             brush = QBrush(QColor(0, 255, 0, 180))
 
-            # Увеличиваем размер точек (было 16, стало 24)
-            ellipse = QGraphicsEllipseItem(x - 12, y - 12, 24, 24)
+            ellipse = CustomEllipseItem(x - radius, y - radius, size, size, room_id, room_number, room_name)
             ellipse.setPen(pen)
             ellipse.setBrush(brush)
             ellipse.setFlag(QGraphicsEllipseItem.ItemIsMovable, True)
             ellipse.setFlag(QGraphicsEllipseItem.ItemIsSelectable, True)
-            ellipse.setData(0, room_id)
-            ellipse.setData(1, room_number)
-            ellipse.setData(2, room_name)
-            ellipse.setToolTip(f"{room_number} - {room_name}")
             scene.addItem(ellipse)
             self.marker_items.append(ellipse)
 
             font = QFont("Arial", 9)
-            text = scene.addText(f"{room_number}", font)
-            text.setPos(x + 18, y - 10)
-            text.setData(0, room_id)
+            text = scene.addText(room_number, font)
+            text.setPos(x + radius + 2, y - radius)
+            text.setDefaultTextColor(Qt.darkGreen)
             text.setToolTip(f"{room_number} - {room_name}")
-            self.marker_items.append(text)
+            self.marker_texts.append(text)
 
         self.ui.graphicsView.setScene(scene)
         self.ui.graphicsView.fitInView(pixmap_item, Qt.KeepAspectRatio)
@@ -605,12 +675,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
         map_info, markers = self.db.get_map_data(branch_id, floor)
         if not map_info:
-            self.show_status(f"Нет схемы для этажа {floor}", True)
-            # Очищаем информацию о комнате
+            self.show_status(f"Нет схемы для {self.get_floor_display_text(floor)}", True)
             self.equipment_model.removeRows(0, self.equipment_model.rowCount())
             return
 
-        # Проверяем существование файла
         if not os.path.exists(map_info['image_path']):
             self.show_status("Файл изображения не найден", True)
             return
@@ -627,25 +695,23 @@ class MainWindow(QtWidgets.QMainWindow):
         scene.addItem(pixmap_item)
 
         self.marker_items_display = []
+        self.marker_texts_display = []
+        size = self.MARKER_SIZE
+        radius = self.MARKER_RADIUS
+
         for marker in markers:
             x, y, room_id, room_name, room_number = marker
 
             pen = QPen(Qt.blue)
-            pen.setWidth(3)
+            pen.setWidth(2)
             brush = QBrush(QColor(0, 0, 255, 150))
 
-            # Увеличиваем размер точек (было 16, стало 24)
-            ellipse = QGraphicsEllipseItem(x - 12, y - 12, 24, 24)
+            ellipse = CustomEllipseItem(x - radius, y - radius, size, size, room_id, room_number, room_name)
             ellipse.setPen(pen)
             ellipse.setBrush(brush)
-            ellipse.setData(0, room_id)
-            ellipse.setData(1, room_number)
-            ellipse.setData(2, room_name)
-            ellipse.setToolTip(f"{room_number} - {room_name}")
             ellipse.setFlag(QGraphicsEllipseItem.ItemIsSelectable, True)
             ellipse.setFlag(QGraphicsEllipseItem.ItemIsMovable, False)
 
-            # Устанавливаем обработчик клика
             ellipse.mousePressEvent = lambda event, e=ellipse: self.on_marker_clicked(event, e)
 
             scene.addItem(ellipse)
@@ -653,29 +719,26 @@ class MainWindow(QtWidgets.QMainWindow):
 
             font = QFont("Arial", 8)
             text = scene.addText(room_number, font)
-            text.setPos(x + 12, y - 8)
-            text.setFlag(QGraphicsEllipseItem.ItemIsSelectable, False)
+            text.setPos(x + radius + 2, y - radius)
+            text.setDefaultTextColor(Qt.darkBlue)
             text.setToolTip(f"{room_number} - {room_name}")
-            self.marker_items_display.append(text)
+            self.marker_texts_display.append(text)
 
         self.ui.graphicsView_2.setScene(scene)
         self.ui.graphicsView_2.fitInView(pixmap_item, Qt.KeepAspectRatio)
 
-        # Очищаем информацию о комнате
         self.equipment_model.removeRows(0, self.equipment_model.rowCount())
-        self.show_status(f"Показан этаж {floor}, {len(markers)} помещений")
+        self.show_status(f"Показан {self.get_floor_display_text(floor)}, {len(markers)} помещений")
 
     def on_marker_clicked(self, event, marker):
         """Обработчик клика по маркеру на схеме просмотра"""
-        room_id = marker.data(0)
-        room_number = marker.data(1)
-        room_name = marker.data(2)
+        room_id = marker.room_id
+        room_number = marker.room_number
+        room_name = marker.room_name
 
         if room_id:
-            # Загружаем оборудование и показываем название комнаты
             self.load_room_equipment(room_id, f"Кабинет {room_number} - {room_name}")
 
-        # Передаём событие дальше
         if hasattr(QGraphicsEllipseItem, 'mousePressEvent'):
             QGraphicsEllipseItem.mousePressEvent(marker, event)
 
@@ -698,31 +761,25 @@ class MainWindow(QtWidgets.QMainWindow):
         finally:
             conn.close()
 
-        # Очищаем таблицу
         self.equipment_model.removeRows(0, self.equipment_model.rowCount())
 
-        # Добавляем строку с названием комнаты (жирным шрифтом)
         room_item = QStandardItem(room_title)
         room_item.setEditable(False)
-        # Делаем жирным
         font = QFont()
         font.setBold(True)
         font.setPointSize(11)
         room_item.setFont(font)
         room_item.setTextAlignment(Qt.AlignCenter)
-        # Объединяем все колонки в одну строку
         empty_items = [QStandardItem("") for _ in range(9)]
         self.equipment_model.appendRow([room_item] + empty_items)
 
         if not rows:
-            # Нет оборудования
             no_equip_item = QStandardItem("Нет оборудования в этом кабинете")
             no_equip_item.setTextAlignment(Qt.AlignCenter)
             no_equip_item.setEditable(False)
             empty_items2 = [QStandardItem("") for _ in range(9)]
             self.equipment_model.appendRow([no_equip_item] + empty_items2)
         else:
-            # Добавляем оборудование
             for row in rows:
                 items = [
                     QStandardItem(row[0] or ""),
@@ -765,7 +822,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def on_export_all_pdf(self):
         """Экспорт всех этажей в PDF с полной информацией об оборудовании"""
         if not REPORTLAB_AVAILABLE:
-            QMessageBox.warning(self, "Ошибка", "Библиотека reportlab не установлена. Установите: pip install reportlab")
+            QMessageBox.warning(self, "Ошибка", "Библиотека reportlab не установлена")
             return
 
         branch_id = None
@@ -793,188 +850,92 @@ class MainWindow(QtWidgets.QMainWindow):
             story = []
             styles = getSampleStyleSheet()
 
-            # Создаем стили с русским шрифтом
             if FONT_REGISTERED:
-                title_style = ParagraphStyle(
-                    'CustomTitle',
-                    parent=styles['Title'],
-                    fontName='CyrillicFont-Bold',
-                    fontSize=18,
-                    alignment=1,
-                    spaceAfter=20
-                )
-                heading_style = ParagraphStyle(
-                    'CustomHeading',
-                    parent=styles['Heading2'],
-                    fontName='CyrillicFont-Bold',
-                    fontSize=14,
-                    spaceAfter=10
-                )
-                normal_style = ParagraphStyle(
-                    'CustomNormal',
-                    parent=styles['Normal'],
-                    fontName='CyrillicFont',
-                    fontSize=10
-                )
-                table_header_style = ParagraphStyle(
-                    'TableHeader',
-                    parent=styles['Normal'],
-                    fontName='CyrillicFont-Bold',
-                    fontSize=9,
-                    alignment=1
-                )
-                table_cell_style = ParagraphStyle(
-                    'TableCell',
-                    parent=styles['Normal'],
-                    fontName='CyrillicFont',
-                    fontSize=8,
-                    alignment=1
-                )
+                title_style = ParagraphStyle('CustomTitle', parent=styles['Title'], fontName='CyrillicFont-Bold', fontSize=18, alignment=1, spaceAfter=20)
+                heading_style = ParagraphStyle('CustomHeading', parent=styles['Heading2'], fontName='CyrillicFont-Bold', fontSize=14, spaceAfter=10)
+                normal_style = ParagraphStyle('CustomNormal', parent=styles['Normal'], fontName='CyrillicFont', fontSize=10)
             else:
                 title_style = styles['Title']
                 heading_style = styles['Heading2']
                 normal_style = styles['Normal']
-                table_header_style = styles['Normal']
-                table_cell_style = styles['Normal']
 
-            # Заголовок документа
             story.append(Paragraph(f"ИНВЕНТАРИЗАЦИОННАЯ ОПИСЬ", title_style))
             story.append(Paragraph(f"Филиал: {branch['name']}", heading_style))
             story.append(Paragraph(f"Адрес: {branch['address']}", normal_style))
-            story.append(Paragraph(f"Дата формирования: {datetime.now().strftime('%d.%m.%Y %H:%M')}", normal_style))
+            story.append(Paragraph(f"Дата: {datetime.now().strftime('%d.%m.%Y %H:%M')}", normal_style))
             story.append(Spacer(1, 10*mm))
 
-            total_equipment_all = 0
-            total_value_all = 0
-
-            # Проходим по этажам
-            for floor in range(1, branch['floors_count'] + 1):
-                story.append(Paragraph(f"ЭТАЖ {floor}", heading_style))
+            for floor in range(-3, branch['floors_count'] + 1):
+                story.append(Paragraph(f"{self.get_floor_display_text(floor)}", heading_style))
                 story.append(Spacer(1, 5*mm))
 
-                # Получаем схему этажа
                 map_info, markers = self.db.get_map_data(branch_id, floor)
 
                 if map_info and os.path.exists(map_info['image_path']):
                     try:
                         img = Image(map_info['image_path'])
-                        img.drawHeight = 60*mm
-                        img.drawWidth = 90*mm
+                        img.drawHeight = 80*mm
+                        img.drawWidth = 120*mm
                         story.append(img)
                         story.append(Spacer(1, 5*mm))
-                    except Exception as e:
-                        print(f"Ошибка загрузки изображения: {e}")
+                    except:
+                        pass
 
                 if markers:
-                    floor_total_equipment = 0
-                    floor_total_value = 0
-
                     for marker in markers:
                         room_id = marker[2]
                         room_number = marker[4]
                         room_name = marker[3]
-
-                        # Получаем оборудование для комнаты
                         equipment = self.get_equipment_for_room(room_id)
 
+                        story.append(Paragraph(f"Кабинет {room_number} - {room_name}", normal_style))
+
                         if equipment:
-                            story.append(Paragraph(f"Кабинет {room_number} - {room_name}", normal_style))
-
-                            # Таблица с оборудованием
-                            data = [['№', 'Наименование', 'Категория', 'Тип', 'Кол-во', 'Цена', 'Сумма',
-                                     'Серийный №', 'Инв. №', 'Производитель', 'Статус']]
-
+                            data = [['№', 'Наименование', 'Категория', 'Кол-во', 'Цена', 'Сумма', 'Серийный №']]
                             room_total = 0
                             for i, eq in enumerate(equipment, 1):
-                                name = eq[0] or ''
-                                category = eq[1] or ''
-                                eq_type = eq[2] or ''
-                                quantity = str(eq[3])
-                                price = f"{eq[4]:.2f}" if eq[4] else '0.00'
                                 try:
                                     sum_val = float(eq[3]) * float(eq[4] if eq[4] else 0)
                                     room_total += sum_val
-                                    sum_str = f"{sum_val:.2f}"
                                 except:
-                                    sum_str = '0.00'
-
-                                serial = eq[5] or ''
-                                inventory = eq[6] or ''
-                                supplier = eq[8] or ''
-                                status = eq[9] or ''
-
+                                    sum_val = 0
                                 data.append([
                                     str(i),
-                                    name[:30] + '...' if len(name) > 30 else name,
-                                    category[:15] + '...' if len(category) > 15 else category,
-                                    eq_type[:15] + '...' if len(eq_type) > 15 else eq_type,
-                                    quantity,
-                                    price,
-                                    sum_str,
-                                    serial[:15] + '...' if len(serial) > 15 else serial,
-                                    inventory[:10] + '...' if len(inventory) > 10 else inventory,
-                                    supplier[:15] + '...' if len(supplier) > 15 else supplier,
-                                    status[:10] + '...' if len(status) > 10 else status
+                                    (eq[0] or '')[:25],
+                                    (eq[1] or '')[:15],
+                                    str(eq[3]),
+                                    f"{eq[4]:.2f}" if eq[4] else '0.00',
+                                    f"{sum_val:.2f}",
+                                    (eq[5] or '')[:15]
                                 ])
+                            data.append(['', '', '', '', '', f'Итого: {room_total:.2f}', ''])
 
-                            # Добавляем итог по комнате
-                            data.append(['', '', '', '', '', '', f'Итого: {room_total:.2f}', '', '', '', ''])
-
-                            table = Table(data, colWidths=[10*mm, 30*mm, 20*mm, 20*mm, 12*mm, 15*mm, 20*mm, 20*mm, 15*mm, 20*mm, 15*mm])
-
-                            table_style = [
+                            table = Table(data, colWidths=[10*mm, 35*mm, 20*mm, 15*mm, 20*mm, 25*mm, 25*mm])
+                            table.setStyle(TableStyle([
                                 ('GRID', (0,0), (-1,-2), 0.5, colors.grey),
                                 ('BACKGROUND', (0,0), (-1,0), colors.lightblue),
                                 ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-                                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                                ('SPAN', (0,-1), (5,-1)),  # Объединяем ячейки для итога
+                                ('SPAN', (0,-1), (4,-1)),
                                 ('BACKGROUND', (0,-1), (-1,-1), colors.lightgrey),
                                 ('FONTSIZE', (0,0), (-1,-1), 7),
-                            ]
-
-                            if FONT_REGISTERED:
-                                table_style.extend([
-                                    ('FONTNAME', (0,0), (-1,0), 'CyrillicFont-Bold'),
-                                    ('FONTNAME', (0,1), (-1,-1), 'CyrillicFont'),
-                                ])
-
-                            table.setStyle(TableStyle(table_style))
+                            ]))
                             story.append(table)
                             story.append(Spacer(1, 5*mm))
-
-                            floor_total_equipment += len(equipment)
-                            floor_total_value += room_total
-
-                    # Итог по этажу
-                    story.append(Paragraph(f"Итого по этажу {floor}: {floor_total_equipment} ед. на сумму {floor_total_value:.2f} руб.",
-                                           normal_style))
-                    story.append(Spacer(1, 10*mm))
-
-                    total_equipment_all += floor_total_equipment
-                    total_value_all += floor_total_value
                 else:
                     story.append(Paragraph("Нет помещений на этаже", normal_style))
-                    story.append(Spacer(1, 10*mm))
 
                 story.append(PageBreak())
 
-            # Итог по всему филиалу
-            story.append(Paragraph("ИТОГО ПО ФИЛИАЛУ:", heading_style))
-            story.append(Paragraph(f"Всего единиц оборудования: {total_equipment_all}", normal_style))
-            story.append(Paragraph(f"Общая стоимость: {total_value_all:.2f} руб.", normal_style))
-
             doc.build(story)
-            self.show_status(f"Отчет сохранен: {os.path.basename(file_path)}")
+            self.show_status(f"Отчет сохранен")
 
         except Exception as e:
             self.show_status(f"Ошибка создания PDF: {str(e)}", True)
-            import traceback
-            traceback.print_exc()
 
     def on_export_floor_pdf(self):
-        """Экспорт одного этажа в PDF с полной информацией об оборудовании"""
+        """Экспорт одного этажа в PDF"""
         if not REPORTLAB_AVAILABLE:
-            QMessageBox.warning(self, "Ошибка", "Библиотека reportlab не установлена. Установите: pip install reportlab")
+            QMessageBox.warning(self, "Ошибка", "Библиотека reportlab не установлена")
             return
 
         branch_id = None
@@ -994,7 +955,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return
 
         file_path, _ = QFileDialog.getSaveFileName(
-            self, "Сохранить отчет", f"инвентаризация_{branch['name']}_этаж_{floor}.pdf", "PDF Files (*.pdf)"
+            self, "Сохранить отчет", f"инвентаризация_{branch['name']}_{self.get_floor_display_text(floor)}.pdf", "PDF Files (*.pdf)"
         )
         if not file_path:
             return
@@ -1006,166 +967,82 @@ class MainWindow(QtWidgets.QMainWindow):
             story = []
             styles = getSampleStyleSheet()
 
-            # Создаем стили с русским шрифтом
             if FONT_REGISTERED:
-                title_style = ParagraphStyle(
-                    'CustomTitle',
-                    parent=styles['Title'],
-                    fontName='CyrillicFont-Bold',
-                    fontSize=18,
-                    alignment=1,
-                    spaceAfter=20
-                )
-                heading_style = ParagraphStyle(
-                    'CustomHeading',
-                    parent=styles['Heading2'],
-                    fontName='CyrillicFont-Bold',
-                    fontSize=14,
-                    spaceAfter=10
-                )
-                normal_style = ParagraphStyle(
-                    'CustomNormal',
-                    parent=styles['Normal'],
-                    fontName='CyrillicFont',
-                    fontSize=10
-                )
-                table_header_style = ParagraphStyle(
-                    'TableHeader',
-                    parent=styles['Normal'],
-                    fontName='CyrillicFont-Bold',
-                    fontSize=9,
-                    alignment=1
-                )
-                table_cell_style = ParagraphStyle(
-                    'TableCell',
-                    parent=styles['Normal'],
-                    fontName='CyrillicFont',
-                    fontSize=8,
-                    alignment=1
-                )
+                title_style = ParagraphStyle('CustomTitle', parent=styles['Title'], fontName='CyrillicFont-Bold', fontSize=18, alignment=1, spaceAfter=20)
+                heading_style = ParagraphStyle('CustomHeading', parent=styles['Heading2'], fontName='CyrillicFont-Bold', fontSize=14, spaceAfter=10)
+                normal_style = ParagraphStyle('CustomNormal', parent=styles['Normal'], fontName='CyrillicFont', fontSize=10)
             else:
                 title_style = styles['Title']
                 heading_style = styles['Heading2']
                 normal_style = styles['Normal']
-                table_header_style = styles['Normal']
-                table_cell_style = styles['Normal']
 
-            # Заголовок документа
             story.append(Paragraph(f"ИНВЕНТАРИЗАЦИОННАЯ ОПИСЬ", title_style))
             story.append(Paragraph(f"Филиал: {branch['name']}", heading_style))
             story.append(Paragraph(f"Адрес: {branch['address']}", normal_style))
-            story.append(Paragraph(f"Этаж: {floor}", heading_style))
-            story.append(Paragraph(f"Дата формирования: {datetime.now().strftime('%d.%m.%Y %H:%M')}", normal_style))
+            story.append(Paragraph(f"{self.get_floor_display_text(floor)}", heading_style))
+            story.append(Paragraph(f"Дата: {datetime.now().strftime('%d.%m.%Y %H:%M')}", normal_style))
             story.append(Spacer(1, 10*mm))
 
-            # Получаем схему этажа
             map_info, markers = self.db.get_map_data(branch_id, floor)
 
             if map_info and os.path.exists(map_info['image_path']):
                 try:
                     img = Image(map_info['image_path'])
-                    img.drawHeight = 60*mm
-                    img.drawWidth = 90*mm
+                    img.drawHeight = 100*mm
+                    img.drawWidth = 150*mm
                     story.append(img)
                     story.append(Spacer(1, 5*mm))
-                except Exception as e:
-                    print(f"Ошибка загрузки изображения: {e}")
-
-            floor_total_equipment = 0
-            floor_total_value = 0
+                except:
+                    pass
 
             if markers:
                 for marker in markers:
                     room_id = marker[2]
                     room_number = marker[4]
                     room_name = marker[3]
-
-                    # Получаем оборудование для комнаты
                     equipment = self.get_equipment_for_room(room_id)
 
+                    story.append(Paragraph(f"Кабинет {room_number} - {room_name}", normal_style))
+
                     if equipment:
-                        story.append(Paragraph(f"Кабинет {room_number} - {room_name}", normal_style))
-
-                        # Таблица с оборудованием
-                        data = [['№', 'Наименование', 'Категория', 'Тип', 'Кол-во', 'Цена', 'Сумма',
-                                 'Серийный №', 'Инв. №', 'Производитель', 'Статус']]
-
+                        data = [['№', 'Наименование', 'Категория', 'Кол-во', 'Цена', 'Сумма', 'Серийный №']]
                         room_total = 0
                         for i, eq in enumerate(equipment, 1):
-                            name = eq[0] or ''
-                            category = eq[1] or ''
-                            eq_type = eq[2] or ''
-                            quantity = str(eq[3])
-                            price = f"{eq[4]:.2f}" if eq[4] else '0.00'
                             try:
                                 sum_val = float(eq[3]) * float(eq[4] if eq[4] else 0)
                                 room_total += sum_val
-                                sum_str = f"{sum_val:.2f}"
                             except:
-                                sum_str = '0.00'
-
-                            serial = eq[5] or ''
-                            inventory = eq[6] or ''
-                            supplier = eq[8] or ''
-                            status = eq[9] or ''
-
+                                sum_val = 0
                             data.append([
                                 str(i),
-                                name[:30] + '...' if len(name) > 30 else name,
-                                category[:15] + '...' if len(category) > 15 else category,
-                                eq_type[:15] + '...' if len(eq_type) > 15 else eq_type,
-                                quantity,
-                                price,
-                                sum_str,
-                                serial[:15] + '...' if len(serial) > 15 else serial,
-                                inventory[:10] + '...' if len(inventory) > 10 else inventory,
-                                supplier[:15] + '...' if len(supplier) > 15 else supplier,
-                                status[:10] + '...' if len(status) > 10 else status
+                                (eq[0] or '')[:25],
+                                (eq[1] or '')[:15],
+                                str(eq[3]),
+                                f"{eq[4]:.2f}" if eq[4] else '0.00',
+                                f"{sum_val:.2f}",
+                                (eq[5] or '')[:15]
                             ])
+                        data.append(['', '', '', '', '', f'Итого: {room_total:.2f}', ''])
 
-                        # Добавляем итог по комнате
-                        data.append(['', '', '', '', '', '', f'Итого: {room_total:.2f}', '', '', '', ''])
-
-                        table = Table(data, colWidths=[10*mm, 30*mm, 20*mm, 20*mm, 12*mm, 15*mm, 20*mm, 20*mm, 15*mm, 20*mm, 15*mm])
-
-                        table_style = [
+                        table = Table(data, colWidths=[10*mm, 35*mm, 20*mm, 15*mm, 20*mm, 25*mm, 25*mm])
+                        table.setStyle(TableStyle([
                             ('GRID', (0,0), (-1,-2), 0.5, colors.grey),
                             ('BACKGROUND', (0,0), (-1,0), colors.lightblue),
                             ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-                            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                            ('SPAN', (0,-1), (5,-1)),  # Объединяем ячейки для итога
+                            ('SPAN', (0,-1), (4,-1)),
                             ('BACKGROUND', (0,-1), (-1,-1), colors.lightgrey),
                             ('FONTSIZE', (0,0), (-1,-1), 7),
-                        ]
-
-                        if FONT_REGISTERED:
-                            table_style.extend([
-                                ('FONTNAME', (0,0), (-1,0), 'CyrillicFont-Bold'),
-                                ('FONTNAME', (0,1), (-1,-1), 'CyrillicFont'),
-                            ])
-
-                        table.setStyle(TableStyle(table_style))
+                        ]))
                         story.append(table)
                         story.append(Spacer(1, 5*mm))
-
-                        floor_total_equipment += len(equipment)
-                        floor_total_value += room_total
             else:
                 story.append(Paragraph("Нет помещений на этаже", normal_style))
 
-            # Итог по этажу
-            story.append(Spacer(1, 10*mm))
-            story.append(Paragraph(f"ИТОГО ПО ЭТАЖУ {floor}:", heading_style))
-            story.append(Paragraph(f"Всего единиц оборудования: {floor_total_equipment}", normal_style))
-            story.append(Paragraph(f"Общая стоимость: {floor_total_value:.2f} руб.", normal_style))
-
             doc.build(story)
-            self.show_status(f"Отчет сохранен: {os.path.basename(file_path)}")
+            self.show_status(f"Отчет сохранен")
 
         except Exception as e:
             self.show_status(f"Ошибка создания PDF: {str(e)}", True)
-            import traceback
-            traceback.print_exc()
 
 
 if __name__ == "__main__":

@@ -9,7 +9,6 @@ class DatabaseHandler:
         if db_path is None:
             db_path = paths.get_db_file_path()
 
-        # Создаем директорию для БД если её нет
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
         self.db_path = db_path
         print(f"🔄 Подключение к БД: {db_path}")
@@ -18,20 +17,15 @@ class DatabaseHandler:
         self._ensure_new_columns()
 
     def get_connection(self):
-        """Возвращает соединение с БД с поддержкой именованных колонок и внешних ключей"""
         conn = sqlite3.connect(self.db_path)
-        # ВКЛЮЧАЕМ ИМЕНОВАННЫЕ КОЛОНКИ - ЭТО КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ!
         conn.row_factory = sqlite3.Row
-        # Включаем поддержку внешних ключей
         conn.execute("PRAGMA foreign_keys = ON")
         return conn
 
     def create_tables(self):
-        """Создает все необходимые таблицы"""
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        # Таблица филиалов
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS branches (
                                                                branch_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -41,7 +35,6 @@ class DatabaseHandler:
                        )
                        ''')
 
-        # Таблица сотрудников
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS employees (
                                                                 worker_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,7 +49,6 @@ class DatabaseHandler:
                            )
                        ''')
 
-        # Таблица окружения
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS environment (
                                                                   environment_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -66,7 +58,6 @@ class DatabaseHandler:
                            )
                        ''')
 
-        # Таблица комнат
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS room (
                                                            room_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -86,7 +77,6 @@ class DatabaseHandler:
                            )
                        ''')
 
-        # Таблица оборудования (все необходимые поля)
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS equipment (
                                                                 equipment_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -109,11 +99,11 @@ class DatabaseHandler:
                                                                 room_id INTEGER,
                                                                 branch_id INTEGER,
                                                                 workplace_number INTEGER DEFAULT NULL,
-                                                                FOREIGN KEY (room_id) REFERENCES room(room_id) ON DELETE SET NULL
+                                                                FOREIGN KEY (room_id) REFERENCES room(room_id) ON DELETE SET NULL,
+                           FOREIGN KEY (branch_id) REFERENCES branches(branch_id) ON DELETE CASCADE
                            )
                        ''')
 
-        # Таблица поступлений
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS arrivals (
                                                                arrival_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -137,7 +127,6 @@ class DatabaseHandler:
                            )
                        ''')
 
-        # Таблица отчетов
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS reports (
                                                               report_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -154,7 +143,6 @@ class DatabaseHandler:
                            )
                        ''')
 
-        # Таблица лога инвентаризации
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS inventory_log (
                                                                     log_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -171,7 +159,6 @@ class DatabaseHandler:
                            )
                        ''')
 
-        # Таблица пользователей
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS users (
                                                             user_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -181,7 +168,6 @@ class DatabaseHandler:
                        )
                        ''')
 
-        # Таблица компании
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS company (
                                                               id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -189,7 +175,6 @@ class DatabaseHandler:
                        )
                        ''')
 
-        # Таблица карт этажей
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS floor_maps (
                                                                  map_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -201,7 +186,6 @@ class DatabaseHandler:
                            )
                        ''')
 
-        # Таблица маркеров комнат
         cursor.execute('''
                        CREATE TABLE IF NOT EXISTS room_markers (
                                                                    marker_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -220,12 +204,9 @@ class DatabaseHandler:
         print("✅ Таблицы созданы/проверены!")
 
     def _ensure_new_columns(self):
-        """Добавляет недостающие колонки в существующие таблицы"""
         conn = self.get_connection()
         try:
             cursor = conn.cursor()
-
-            # Проверяем и добавляем колонки в equipment
             cursor.execute("PRAGMA table_info(equipment)")
             columns = [col['name'] for col in cursor.fetchall()]
 
@@ -250,34 +231,74 @@ class DatabaseHandler:
         finally:
             conn.close()
 
+    def hard_reset_database(self):
+        """Полный сброс базы данных - удаляет все данные и создает заново"""
+        try:
+            print("\n" + "="*60)
+            print("⚠️ ВНИМАНИЕ: Полный сброс базы данных!")
+            print("="*60)
+
+            conn = self.get_connection()
+            cursor = conn.cursor()
+
+            # Удаляем все данные из всех таблиц в правильном порядке (сначала зависимые)
+            tables = [
+                'inventory_log', 'reports', 'room_markers', 'floor_maps',
+                'equipment', 'arrivals', 'room', 'environment',
+                'employees', 'branches', 'company', 'users'
+            ]
+
+            for table in tables:
+                try:
+                    cursor.execute(f"DELETE FROM {table}")
+                    print(f"   ✅ Очищена таблица: {table}")
+                except Exception as e:
+                    print(f"   ⚠️ Не удалось очистить {table}: {e}")
+
+            # Сбрасываем автоинкремент
+            for table in tables:
+                try:
+                    cursor.execute(f"DELETE FROM sqlite_sequence WHERE name='{table}'")
+                except:
+                    pass
+
+            conn.commit()
+            conn.close()
+
+            print("✅ База данных полностью очищена!")
+
+            # Добавляем тестовые данные
+            self.check_and_add_default_data()
+
+            print("✅ Тестовые данные добавлены!")
+            return True
+
+        except Exception as e:
+            print(f"❌ Ошибка при сбросе БД: {e}")
+            return False
+
     def check_and_add_default_data(self):
         """Проверяет и добавляет данные по умолчанию если БД пуста"""
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        # Проверяем есть ли пользователи
         cursor.execute("SELECT COUNT(*) FROM users")
         if cursor.fetchone()[0] == 0:
-            # Добавляем пользователя по умолчанию
             cursor.execute("INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
                            ("admin", "admin", "admin"))
             print("✅ Добавлен пользователь admin")
 
-        # Проверяем есть ли филиалы
         cursor.execute("SELECT COUNT(*) FROM branches")
         if cursor.fetchone()[0] == 0:
-            # Добавляем тестовый филиал
             cursor.execute("INSERT INTO branches (name, floors_count, address) VALUES (?, ?, ?)",
                            ("Главный офис", 3, "г. Москва, ул. Ленина, 1"))
             branch_id = cursor.lastrowid
 
-            # Добавляем тестового сотрудника
             cursor.execute("""
                            INSERT INTO employees (name_id, job_title, report_count, date_of_work, branch_id)
                            VALUES (?, ?, ?, ?, ?)
                            """, ("Иванов Иван Иванович", "Директор", 0, datetime.now().strftime("%Y-%m-%d"), branch_id))
 
-            # Добавляем тестовую комнату
             cursor.execute("""
                            INSERT INTO room (room_number, room_name, branch_id, floor, capacity, desks_count, chairs_count)
                            VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -288,27 +309,9 @@ class DatabaseHandler:
         conn.commit()
         conn.close()
 
-    def reset_equipment_to_stock(self):
-        """Сбрасывает всё оборудование на склад (удаляет привязку к комнатам)"""
-        print("\n🔄 Сброс оборудования на склад...")
-        conn = self.get_connection()
-        cursor = conn.cursor()
+    # ==================== ВСЕ ОСТАЛЬНЫЕ МЕТОДЫ (без изменений) ====================
 
-        try:
-            cursor.execute("UPDATE equipment SET room_id = NULL, workplace_number = NULL")
-            affected = cursor.rowcount
-            conn.commit()
-            print(f"   ✅ Сброшено {affected} единиц оборудования")
-            return affected
-        except Exception as e:
-            print(f"   ❌ Ошибка сброса: {e}")
-            return 0
-        finally:
-            conn.close()
-
-    # ========== МЕТОДЫ ДЛЯ ФИЛИАЛОВ ==========
     def get_all_branches(self):
-        """Получает все филиалы"""
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT branch_id, name, floors_count, address FROM branches ORDER BY name")
@@ -317,7 +320,6 @@ class DatabaseHandler:
         return branches
 
     def get_branch(self, branch_id):
-        """Получает филиал по ID"""
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT branch_id, name, floors_count, address FROM branches WHERE branch_id = ?", (branch_id,))
@@ -326,7 +328,6 @@ class DatabaseHandler:
         return branch
 
     def add_branch(self, name, floors_count=1, address=''):
-        """Добавляет новый филиал"""
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute("INSERT INTO branches (name, floors_count, address) VALUES (?, ?, ?)",
@@ -337,7 +338,6 @@ class DatabaseHandler:
         return branch_id
 
     def update_branch(self, branch_id, name, floors_count, address):
-        """Обновляет данные филиала"""
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute("UPDATE branches SET name = ?, floors_count = ?, address = ? WHERE branch_id = ?",
@@ -346,19 +346,15 @@ class DatabaseHandler:
         conn.close()
 
     def delete_branch(self, branch_id):
-        """Удаляет филиал"""
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute("DELETE FROM branches WHERE branch_id = ?", (branch_id,))
         conn.commit()
         conn.close()
 
-    # ========== МЕТОДЫ ДЛЯ СОТРУДНИКОВ ==========
     def get_employees(self, branch_id=None):
-        """Получает сотрудников"""
         conn = self.get_connection()
         cursor = conn.cursor()
-
         if branch_id:
             cursor.execute("""
                            SELECT worker_id, name_id, job_title, report_count, date_of_work
@@ -372,28 +368,40 @@ class DatabaseHandler:
                            FROM employees
                            ORDER BY name_id
                            """)
-
         employees = cursor.fetchall()
         conn.close()
         return employees
 
-    def add_employee(self, name, job_title, date_of_work, branch_id=None):
-        """Добавляет нового сотрудника"""
+    def get_employee_by_id(self, employee_id):
         conn = self.get_connection()
         cursor = conn.cursor()
+        try:
+            cursor.execute("""
+                           SELECT worker_id, name_id, job_title, report_count, date_of_work, phone, email, branch_id
+                           FROM employees
+                           WHERE worker_id = ?
+                           """, (employee_id,))
+            employee = cursor.fetchone()
+            return employee
+        except Exception as e:
+            print(f"Ошибка получения сотрудника: {e}")
+            return None
+        finally:
+            conn.close()
 
+    def add_employee(self, name, job_title, date_of_work, branch_id=None):
+        conn = self.get_connection()
+        cursor = conn.cursor()
         cursor.execute("""
                        INSERT INTO employees (name_id, job_title, report_count, date_of_work, branch_id)
                        VALUES (?, ?, ?, ?, ?)
                        """, (name, job_title, 0, date_of_work, branch_id))
-
         employee_id = cursor.lastrowid
         conn.commit()
         conn.close()
         return employee_id
 
     def update_employee(self, worker_id, name, job_title, date_of_work):
-        """Обновляет данные сотрудника"""
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute("""
@@ -407,7 +415,6 @@ class DatabaseHandler:
         return success
 
     def delete_employee(self, employee_id):
-        """Удаляет сотрудника"""
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute("DELETE FROM employees WHERE worker_id = ?", (employee_id,))
@@ -416,22 +423,25 @@ class DatabaseHandler:
         conn.close()
         return success
 
-    # ========== МЕТОДЫ ДЛЯ КОМНАТ ==========
     def get_all_rooms(self):
-        """Получает все комнаты"""
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT room_id, room_number, room_name, floor, branch_id FROM room ORDER BY room_number")
+        cursor.execute("""
+                       SELECT room_id, room_number, room_name, floor, branch_id,
+                              capacity, desks_count, chairs_count, sockets_count, area
+                       FROM room
+                       ORDER BY room_number
+                       """)
         rooms = cursor.fetchall()
         conn.close()
         return rooms
 
     def get_rooms_by_branch(self, branch_id):
-        """Получает комнаты по филиалу"""
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute("""
-                       SELECT room_id, room_number, room_name, floor, capacity, desks_count, chairs_count, sockets_count, area
+                       SELECT room_id, room_number, room_name, floor, capacity,
+                              desks_count, chairs_count, sockets_count, area, responsible_employee_id, notes
                        FROM room
                        WHERE branch_id = ?
                        ORDER BY floor, room_number
@@ -440,8 +450,10 @@ class DatabaseHandler:
         conn.close()
         return rooms
 
+    def get_rooms(self, branch_id=None):
+        return self.get_rooms_by_branch(branch_id)
+
     def get_rooms_by_branch_and_floor(self, branch_id, floor):
-        """Получает комнаты по филиалу и этажу"""
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
@@ -460,7 +472,6 @@ class DatabaseHandler:
             conn.close()
 
     def get_room(self, room_id):
-        """Получает комнату по ID"""
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute("""
@@ -478,10 +489,8 @@ class DatabaseHandler:
     def add_room(self, room_number, room_name, branch_id=None, floor=1,
                  capacity=0, desks_count=0, chairs_count=0, sockets_count=0,
                  area=0.0, responsible_id=None, notes=""):
-        """Добавляет новую комнату"""
         conn = self.get_connection()
         cursor = conn.cursor()
-
         cursor.execute("""
                        INSERT INTO room (
                            room_number, room_name, branch_id, floor,
@@ -493,7 +502,6 @@ class DatabaseHandler:
                            capacity, desks_count, chairs_count, sockets_count,
                            area, responsible_id, notes
                        ))
-
         room_id = cursor.lastrowid
         conn.commit()
         conn.close()
@@ -502,10 +510,8 @@ class DatabaseHandler:
     def update_room(self, room_id, room_number, room_name, floor=1,
                     capacity=0, desks_count=0, chairs_count=0, sockets_count=0,
                     area=0.0, responsible_id=None, notes=""):
-        """Обновляет данные комнаты"""
         conn = self.get_connection()
         cursor = conn.cursor()
-
         cursor.execute("""
                        UPDATE room SET
                                        room_number = ?,
@@ -525,30 +531,22 @@ class DatabaseHandler:
                            sockets_count, area, responsible_id,
                            notes, room_id
                        ))
-
         success = cursor.rowcount > 0
         conn.commit()
         conn.close()
         return success
 
     def delete_room(self, room_id):
-        """Удаляет комнату"""
         conn = self.get_connection()
         cursor = conn.cursor()
-
-        # Сначала обновляем оборудование, чтобы убрать ссылки на удаляемую комнату
         cursor.execute("UPDATE equipment SET room_id = NULL WHERE room_id = ?", (room_id,))
-        # Удаляем комнату
         cursor.execute("DELETE FROM room WHERE room_id = ?", (room_id,))
-
         success = cursor.rowcount > 0
         conn.commit()
         conn.close()
         return success
 
-    # ========== МЕТОДЫ ДЛЯ ОБОРУДОВАНИЯ ==========
     def get_all_equipment(self):
-        """Получает всё оборудование"""
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
@@ -566,7 +564,6 @@ class DatabaseHandler:
             conn.close()
 
     def get_equipment_by_room(self, room_id):
-        """Получает оборудование по комнате"""
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
@@ -585,7 +582,6 @@ class DatabaseHandler:
             conn.close()
 
     def get_equipment_for_distribution(self):
-        """Получает оборудование без привязки к комнате (с учетом NULL, 0, пустой строки)"""
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
@@ -595,7 +591,7 @@ class DatabaseHandler:
                                serial_number, inventory_number, quantity, price, date_incoming,
                                supplier, status
                            FROM equipment
-                           WHERE room_id IS NULL OR room_id = 0 OR room_id = ''
+                           WHERE room_id IS NULL OR room_id = 0
                            ORDER BY name
                            """)
             equipment = cursor.fetchall()
@@ -606,8 +602,27 @@ class DatabaseHandler:
         finally:
             conn.close()
 
+    def get_equipment_by_id(self, equipment_id):
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("""
+                           SELECT equipment_id, name, category, type, model, manufacturer,
+                                  serial_number, inventory_number, quantity, price,
+                                  date_incoming, supplier, phone_supplier, email_supplier,
+                                  status, notes, room_id, branch_id
+                           FROM equipment
+                           WHERE equipment_id = ?
+                           """, (equipment_id,))
+            equipment = cursor.fetchone()
+            return equipment
+        except Exception as e:
+            print(f"Ошибка получения оборудования: {e}")
+            return None
+        finally:
+            conn.close()
+
     def add_equipment(self, data):
-        """Добавляет новое оборудование"""
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
@@ -645,7 +660,6 @@ class DatabaseHandler:
             conn.close()
 
     def update_equipment_room(self, equipment_id, room_id):
-        """Обновляет комнату оборудования"""
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
@@ -659,30 +673,45 @@ class DatabaseHandler:
         finally:
             conn.close()
 
-    def get_equipment_by_id(self, equipment_id):
-        """Получает оборудование по ID"""
+    def reset_equipment_to_stock(self):
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
-            cursor.execute("""
-                           SELECT equipment_id, name, category, type, model, manufacturer,
-                                  serial_number, inventory_number, quantity, price,
-                                  date_incoming, supplier, phone_supplier, email_supplier,
-                                  status, notes, room_id
-                           FROM equipment
-                           WHERE equipment_id = ?
-                           """, (equipment_id,))
-            equipment = cursor.fetchone()
-            return equipment
+            cursor.execute("UPDATE equipment SET room_id = NULL, workplace_number = NULL")
+            affected = cursor.rowcount
+            conn.commit()
+            return affected
         except Exception as e:
-            print(f"Ошибка получения оборудования: {e}")
-            return None
+            print(f"Ошибка сброса: {e}")
+            return 0
         finally:
             conn.close()
 
-    # ========== МЕТОДЫ ДЛЯ ПОЛЬЗОВАТЕЛЕЙ ==========
+    def get_company_name(self):
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT name FROM company LIMIT 1")
+            result = cursor.fetchone()
+            return result['name'] if result else "ГБОУ Больница 2 г. Апшеронск"
+        except:
+            return "ГБОУ Больница 2 г. Апшеронск"
+        finally:
+            conn.close()
+
+    def save_company_name(self, name):
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("DELETE FROM company")
+            cursor.execute("INSERT INTO company (name) VALUES (?)", (name,))
+            conn.commit()
+        except Exception as e:
+            print(f"Ошибка сохранения названия: {e}")
+        finally:
+            conn.close()
+
     def get_users(self):
-        """Получает список пользователей"""
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
@@ -695,7 +724,6 @@ class DatabaseHandler:
             conn.close()
 
     def change_password(self, username, new_password):
-        """Изменяет пароль пользователя"""
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
@@ -708,7 +736,6 @@ class DatabaseHandler:
         return success
 
     def authenticate_user(self, username, password):
-        """Аутентификация пользователя"""
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
@@ -721,36 +748,7 @@ class DatabaseHandler:
         finally:
             conn.close()
 
-    # ========== МЕТОДЫ ДЛЯ КОМПАНИИ ==========
-    def get_company_name(self):
-        """Получает название компании"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute("SELECT name FROM company LIMIT 1")
-            result = cursor.fetchone()
-            conn.close()
-            return result['name'] if result else "ГБОУ Больница 2 г. Апшеронск"
-        except:
-            conn.close()
-            return "ГБОУ Больница 2 г. Апшеронск"
-
-    def save_company_name(self, name):
-        """Сохраняет название компании"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute("DELETE FROM company")
-            cursor.execute("INSERT INTO company (name) VALUES (?)", (name,))
-            conn.commit()
-        except Exception as e:
-            print(f"Ошибка сохранения названия: {e}")
-        finally:
-            conn.close()
-
-    # ========== МЕТОДЫ ДЛЯ ОТЧЕТОВ ==========
     def add_report(self, report_data):
-        """Добавляет новый отчет"""
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
@@ -777,7 +775,6 @@ class DatabaseHandler:
             conn.close()
 
     def get_all_reports(self):
-        """Получает все отчеты"""
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
@@ -795,7 +792,6 @@ class DatabaseHandler:
             conn.close()
 
     def get_report(self, report_id):
-        """Получает отчет по ID"""
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
@@ -813,9 +809,7 @@ class DatabaseHandler:
         finally:
             conn.close()
 
-    # ========== МЕТОДЫ ДЛЯ ГРАФИКИ ==========
     def save_floor_map(self, branch_id, floor_num, img_path):
-        """Сохраняет или обновляет путь к картинке плана этажа"""
         conn = self.get_connection()
         try:
             cursor = conn.cursor()
@@ -829,7 +823,6 @@ class DatabaseHandler:
             conn.close()
 
     def add_marker(self, map_id, room_id, x, y):
-        """Добавляет или обновляет координату комнаты на плане"""
         conn = self.get_connection()
         try:
             cursor = conn.cursor()
@@ -842,19 +835,14 @@ class DatabaseHandler:
             conn.close()
 
     def get_map_data(self, branch_id, floor_num):
-        """Получает путь к картинке и все маркеры для этажа"""
         conn = self.get_connection()
         try:
             cursor = conn.cursor()
-            # Получаем карту
             cursor.execute("SELECT map_id, image_path FROM floor_maps WHERE branch_id = ? AND floor_number = ?",
                            (branch_id, floor_num))
             map_info = cursor.fetchone()
-
             if not map_info:
                 return None, []
-
-            # Получаем маркеры для этой карты
             cursor.execute("""
                            SELECT rm.x, rm.y, rm.room_id, r.room_name, r.room_number
                            FROM room_markers rm
@@ -862,52 +850,23 @@ class DatabaseHandler:
                            WHERE rm.map_id = ?
                            """, (map_info['map_id'],))
             markers = cursor.fetchall()
-
             return map_info, markers
         finally:
             conn.close()
 
     def delete_markers_by_map(self, map_id):
-        """Удаляет только точки на карте"""
         conn = self.get_connection()
         conn.execute("DELETE FROM room_markers WHERE map_id = ?", (map_id,))
         conn.commit()
         conn.close()
 
     def delete_full_map(self, map_id):
-        """Удаляет и карту, и точки (благодаря ON DELETE CASCADE)"""
         conn = self.get_connection()
         conn.execute("DELETE FROM floor_maps WHERE map_id = ?", (map_id,))
         conn.commit()
         conn.close()
-        print("✅ Карта удалена!")
 
 
 if __name__ == "__main__":
     db = DatabaseHandler()
     print("\n✅ DatabaseHandler готов к работе!")
-
-    # Проверка филиалов
-    branches = db.get_all_branches()
-    print(f"\n📋 Филиалы в БД: {len(branches)}")
-    for branch in branches:
-        print(f"  - {branch['name']} (этажей: {branch['floors_count']}, адрес: {branch['address']})")
-
-    # Проверка комнат
-    rooms = db.get_all_rooms()
-    print(f"\n📋 Комнаты в БД: {len(rooms)}")
-    for room in rooms:
-        print(f"  - {room['room_number']}: {room['room_name']} (этаж: {room['floor']})")
-
-    # Проверка оборудования
-    equipment = db.get_all_equipment()
-    print(f"\n📋 Оборудование в БД: {len(equipment)}")
-    for eq in equipment:
-        print(f"  - {eq['name']} (серийный: {eq['serial_number']}, статус: {eq['status']}, кол-во: {eq['quantity']})")
-
-    # Опция сброса оборудования на склад
-    print("\n" + "=" * 60)
-    response = input("Сбросить всё оборудование на склад? (y/n): ")
-    if response.lower() == 'y':
-        count = db.reset_equipment_to_stock()
-        print(f"\n✅ Сброшено {count} единиц оборудования")

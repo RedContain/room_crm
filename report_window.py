@@ -467,7 +467,7 @@ class ReportWindow(QMainWindow):
             self.on_room_changed_inventory()
             self.show_notification("Данные инвентаризации обновлены")
         elif current_tab == 0:
-            self.load_distribution_equipment()
+            self.load_distribution_equipment(silent=True)
             if self.current_room_id:
                 self.load_room_equipment(self.current_room_id)
             self.show_notification("Данные распределения обновлены")
@@ -604,6 +604,7 @@ class ReportWindow(QMainWindow):
             self.show_notification(f"Ошибка: {e}", error=True)
 
     def refresh_all_data(self):
+        """Полная перезагрузка данных после закрытия окна настроек"""
         print("🔄 Полная перезагрузка данных...")
 
         branches = self.db.get_all_branches()
@@ -668,7 +669,8 @@ class ReportWindow(QMainWindow):
             combo.repaint()
 
         self.load_arrival_data()
-        self.load_distribution_equipment()
+        # Загружаем оборудование для распределения в тихом режиме (без диалога)
+        self.load_distribution_equipment(silent=True)
 
         if self.current_room_id:
             self.load_room_equipment(self.current_room_id)
@@ -1086,7 +1088,7 @@ class ReportWindow(QMainWindow):
         try:
             equip_id = self.db.add_equipment(data)
             self.load_arrival_data()
-            self.load_distribution_equipment()
+            self.load_distribution_equipment(silent=True)
             self.clear_arrival_form()
             self.show_notification(f"Позиция добавлена (ID: {equip_id})")
             QMessageBox.information(self, "Успех", f"Позиция добавлена (ID: {equip_id})")
@@ -1126,7 +1128,7 @@ class ReportWindow(QMainWindow):
                     self.delete_equipment_by_id(int(item_id.text()))
                 self.ui.tableWidget.removeRow(row)
             self.load_arrival_data()
-            self.load_distribution_equipment()
+            self.load_distribution_equipment(silent=True)
             self.show_notification(f"Удалено {len(selected_rows)} позиций")
 
     def export_arrival_pdf(self):
@@ -1802,14 +1804,18 @@ class ReportWindow(QMainWindow):
         self.ui.tableView_2.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.ui.tableView_2.setSelectionMode(QAbstractItemView.MultiSelection)
 
-    def load_distribution_equipment(self):
+    def load_distribution_equipment(self, silent=False):
+        """Загружает оборудование для распределения"""
         try:
             rows = self.db.get_equipment_for_distribution()
             print(f"[DEBUG] Найдено оборудования для распределения: {len(rows)}")
             self.distribution_model.removeRows(0, self.distribution_model.rowCount())
 
-            if len(rows) == 0:
-                reply = QMessageBox.question(self, "Нет оборудования", "На складе нет оборудования для распределения.\n\nХотите сбросить всё оборудование на склад?", QMessageBox.Yes | QMessageBox.No)
+            if len(rows) == 0 and not silent:
+                # Показываем диалог только если не в тихом режиме
+                reply = QMessageBox.question(self, "Нет оборудования",
+                                             "На складе нет оборудования для распределения.\n\nХотите сбросить всё оборудование на склад?",
+                                             QMessageBox.Yes | QMessageBox.No)
                 if reply == QMessageBox.Yes:
                     count = self.db.reset_equipment_to_stock()
                     if count > 0:
@@ -1882,7 +1888,8 @@ class ReportWindow(QMainWindow):
 
                 self.distribution_model.appendRow(items)
 
-            self.show_notification(f"Загружено {len(rows)} позиций для распределения")
+            if len(rows) > 0:
+                self.show_notification(f"Загружено {len(rows)} позиций для распределения")
 
         except Exception as e:
             print(f"[ERROR] {e}")
@@ -1964,7 +1971,7 @@ class ReportWindow(QMainWindow):
             finally:
                 conn.close()
             self.load_room_equipment(self.current_room_id)
-            self.load_distribution_equipment()
+            self.load_distribution_equipment(silent=True)
             self.show_notification("Оборудование удалено из комнаты")
 
     def on_branch_changed_distribution(self):
@@ -2140,7 +2147,7 @@ class ReportWindow(QMainWindow):
         finally:
             conn.close()
 
-        self.load_distribution_equipment()
+        self.load_distribution_equipment(silent=True)
         if self.current_room_id:
             self.load_room_equipment(self.current_room_id)
 
@@ -2168,7 +2175,7 @@ class ReportWindow(QMainWindow):
             finally:
                 conn.close()
             self.load_room_equipment(self.current_room_id)
-            self.load_distribution_equipment()
+            self.load_distribution_equipment(silent=True)
             self.show_notification("Распределение сброшено")
 
     def save_all_distribution(self):
@@ -2188,7 +2195,7 @@ class ReportWindow(QMainWindow):
                 self.show_notification(f"Не удалось удалить: {e}", error=True)
             finally:
                 conn.close()
-            self.load_distribution_equipment()
+            self.load_distribution_equipment(silent=True)
             if self.current_room_id:
                 self.load_room_equipment(self.current_room_id)
             self.show_notification("Все распределения удалены")
@@ -2343,7 +2350,7 @@ class ReportWindow(QMainWindow):
             self.ui.lineEdit_24.clear()
         if hasattr(self, 'room_equipment_model'):
             self.room_equipment_model.removeRows(0, self.room_equipment_model.rowCount())
-        self.load_distribution_equipment()
+        self.load_distribution_equipment(silent=True)
 
 
 def main():
