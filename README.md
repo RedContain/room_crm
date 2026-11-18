@@ -47,3 +47,4 @@ Desktop-приложение для автоматизации учёта, хр�
 
 ![Распределение](https://github.com/RedContain/room_crm/blob/master/state_crm_main.png)
 
+![Показ схемы](https://github.com/RedContain/room_crm/blob/master/room_crm_4.png)
