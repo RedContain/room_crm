@@ -460,21 +460,26 @@ class MainWindow(QMainWindow):
         self.company_name_edit = self.ui.lineEdit
         self.branches_spin = self.ui.spinBox
         self.branches_list = self.ui.listWidget
-        self.branch_group = self.ui.groupBox_3
+        self.branch_group = getattr(self.ui, 'groupBox_3', None)
         self.branch_name_edit = self.ui.lineEdit_2
         self.branch_address_edit = self.ui.lineEdit_5
         self.employees_spin = self.ui.spinBox_3
-        self.floors_spin = self.ui.spinBox_4
-        self.rooms_spin = self.ui.spinBox_2
-        self.save_branch_count_btn = self.ui.pushButton_6
+        # В обновленной форме этажи и комнаты поменяли местами.
+        self.floors_spin = self.ui.spinBox_2
+        self.rooms_spin = self.ui.spinBox_4
+        self.save_branch_count_btn = getattr(self.ui, 'pushButton_6', None)
         self.delete_branch_btn = self.ui.pushButton_3
-        self.save_branch_btn = self.ui.pushButton_2
+        self.save_branch_btn = getattr(self.ui, 'pushButton_2', None)
         self.save_all_btn = self.ui.pushButton_4
         self.reset_all_btn = self.ui.pushButton_5
         self.employees_btn = self.ui.toolButton_2
         self.rooms_btn = self.ui.toolButton_4
 
-        self.branch_group.setEnabled(False)
+        self.branch_editor_widgets = [
+            self.branch_name_edit, self.branch_address_edit, self.employees_spin,
+            self.floors_spin, self.rooms_spin, self.employees_btn, self.rooms_btn
+        ]
+        self.set_branch_editor_enabled(False)
 
         self.setup_connections()
         self.load_initial_data()
@@ -490,9 +495,11 @@ class MainWindow(QMainWindow):
         self.branch_address_edit.textChanged.connect(self.on_change)
         self.floors_spin.valueChanged.connect(self.on_change)
 
-        self.save_branch_count_btn.clicked.connect(self.save_branches_count)
+        if self.save_branch_count_btn is not None:
+            self.save_branch_count_btn.clicked.connect(self.save_branches_count)
         self.branches_list.itemClicked.connect(self.on_branch_selected)
-        self.save_branch_btn.clicked.connect(self.save_branch)
+        if self.save_branch_btn is not None:
+            self.save_branch_btn.clicked.connect(self.save_branch)
         self.delete_branch_btn.clicked.connect(self.delete_branch)
         self.employees_btn.clicked.connect(self.open_employees_dialog)
         self.rooms_btn.clicked.connect(self.open_rooms_dialog)
@@ -501,6 +508,13 @@ class MainWindow(QMainWindow):
 
         self.reset_all_btn.setShortcut(Qt.Key_F5)
         self.reset_all_btn.setToolTip("Полный сброс базы данных (F5)")
+
+    def set_branch_editor_enabled(self, enabled):
+        if self.branch_group is not None:
+            self.branch_group.setEnabled(enabled)
+            return
+        for widget in self.branch_editor_widgets:
+            widget.setEnabled(enabled)
 
     def eventFilter(self, obj, event):
         if obj == self.branches_list and event.type() == QEvent.KeyPress:
@@ -575,11 +589,13 @@ class MainWindow(QMainWindow):
         elif target < current:
             QMessageBox.warning(self, "Внимание",
                                 "Для уменьшения количества филиалов удалите лишние вручную (выберите филиал и нажмите Delete или кнопку Удалить)")
+            return False
+        return True
 
     def on_branch_selected(self, item):
         self.current_branch_id = item.data(Qt.UserRole)
         self.refresh_current_branch_data()
-        self.branch_group.setEnabled(True)
+        self.set_branch_editor_enabled(True)
 
     def save_branch(self):
         if not self.current_branch_id:
@@ -612,7 +628,7 @@ class MainWindow(QMainWindow):
         if reply == QMessageBox.Yes:
             self.db.delete_branch(self.current_branch_id)
             self.load_branches()
-            self.branch_group.setEnabled(False)
+            self.set_branch_editor_enabled(False)
             self.current_branch_id = None
             self.branch_name_edit.clear()
             self.branch_address_edit.clear()
@@ -648,6 +664,8 @@ class MainWindow(QMainWindow):
 
     def save_all_changes(self):
         try:
+            if not self.save_branches_count():
+                return
             company_name = self.company_name_edit.text().strip()
             if company_name:
                 self.db.save_company_name(company_name)
@@ -701,7 +719,7 @@ class MainWindow(QMainWindow):
                     # Полностью перезагружаем интерфейс
                     self.load_initial_data()
                     self.current_branch_id = None
-                    self.branch_group.setEnabled(False)
+                    self.set_branch_editor_enabled(False)
                     self.branch_name_edit.clear()
                     self.branch_address_edit.clear()
                     self.floors_spin.setValue(1)

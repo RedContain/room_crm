@@ -435,52 +435,65 @@ class ReportWindow(QMainWindow):
         QShortcut(QKeySequence("F5"), self, self.refresh_current_tab)
         QShortcut(QKeySequence("Ctrl+F"), self, self.focus_on_filter)
 
+    def current_tab_kind(self):
+        current_index = self.ui.tabWidget.currentIndex()
+        for widget_name, tab_kind in (
+                ('tab_2', 'arrival'),
+                ('tab_5', 'distribution'),
+                ('tab', 'inventory')):
+            widget = getattr(self.ui, widget_name, None)
+            if widget is not None and self.ui.tabWidget.indexOf(widget) == current_index:
+                return tab_kind
+        return None
+
     def save_current(self):
-        current_tab = self.ui.tabWidget.currentIndex()
-        if current_tab == 2:
+        current_tab = self.current_tab_kind()
+        if current_tab == 'arrival':
             self.save_arrival()
-        elif current_tab == 0:
+        elif current_tab == 'distribution':
             self.export_room_report()
-        elif current_tab == 1:
+        elif current_tab == 'inventory':
             self.export_inventory_room_report()
 
     def export_current_pdf(self):
-        current_tab = self.ui.tabWidget.currentIndex()
-        if current_tab == 2:
+        current_tab = self.current_tab_kind()
+        if current_tab == 'arrival':
             self.export_arrival_pdf()
-        elif current_tab == 1:
+        elif current_tab == 'inventory':
             self.export_inventory_room_report_pdf()
         else:
             self.show_notification("PDF доступен для вкладок 'Поступление' и 'Инвентаризация'", error=True)
 
     def delete_selected_in_current_tab(self):
-        current_tab = self.ui.tabWidget.currentIndex()
-        if current_tab == 2:
+        current_tab = self.current_tab_kind()
+        if current_tab == 'arrival':
             self.delete_selected_arrival()
 
     def refresh_current_tab(self):
-        current_tab = self.ui.tabWidget.currentIndex()
-        if current_tab == 2:
+        current_tab = self.current_tab_kind()
+        if current_tab == 'arrival':
             self.load_arrival_data()
             self.show_notification("Данные поступления обновлены")
-        elif current_tab == 1:
+        elif current_tab == 'inventory':
             self.on_room_changed_inventory()
             self.show_notification("Данные инвентаризации обновлены")
-        elif current_tab == 0:
+        elif current_tab == 'distribution':
             self.load_distribution_equipment(silent=True)
             if self.current_room_id:
                 self.load_room_equipment(self.current_room_id)
             self.show_notification("Данные распределения обновлены")
 
     def focus_on_filter(self):
-        current_tab = self.ui.tabWidget.currentIndex()
-        if current_tab == 2:
+        current_tab = self.current_tab_kind()
+        if current_tab == 'arrival':
             if hasattr(self.ui, 'textEdit') and self.ui.textEdit.isVisible():
                 self.ui.textEdit.setFocus()
-        elif current_tab == 1:
+        elif current_tab == 'inventory':
             if hasattr(self.ui, 'lineEdit_20'):
                 self.ui.lineEdit_20.setFocus()
-        elif current_tab == 0:
+            elif hasattr(self.ui, 'textEdit_3'):
+                self.ui.textEdit_3.setFocus()
+        elif current_tab == 'distribution':
             if hasattr(self.ui, 'textEdit_2'):
                 self.ui.textEdit_2.setFocus()
 
@@ -836,6 +849,7 @@ class ReportWindow(QMainWindow):
 
         if hasattr(self.ui, 'textEdit'):
             self.ui.textEdit.setPlaceholderText("🔍 Поиск по названию, категории, типу, серийному номеру...")
+            self.ui.textEdit.clear()
             self.ui.textEdit.textChanged.connect(self.filter_arrival_table)
 
     def setup_arrival_tab(self):
@@ -1345,6 +1359,10 @@ class ReportWindow(QMainWindow):
             self.ui.comboBox_11.currentIndexChanged.connect(self.apply_inventory_filters)
         if hasattr(self.ui, 'lineEdit_20'):
             self.ui.lineEdit_20.textChanged.connect(self.apply_inventory_filters)
+        if hasattr(self.ui, 'textEdit_3'):
+            self.ui.textEdit_3.setPlaceholderText("Поиск по названию, модели, типу...")
+            self.ui.textEdit_3.clear()
+            self.ui.textEdit_3.textChanged.connect(self.apply_inventory_filters)
 
         self.load_categories_to_combo(self.ui.comboBox_12)
         self.load_types_to_combo(self.ui.comboBox_11)
@@ -1411,7 +1429,12 @@ class ReportWindow(QMainWindow):
     def apply_inventory_filters(self):
         category = self.ui.comboBox_12.currentData() if hasattr(self.ui, 'comboBox_12') else None
         type_ = self.ui.comboBox_11.currentData() if hasattr(self.ui, 'comboBox_11') else None
-        name_filter = self.ui.lineEdit_20.text().lower() if hasattr(self.ui, 'lineEdit_20') else ""
+        if hasattr(self.ui, 'lineEdit_20'):
+            name_filter = self.ui.lineEdit_20.text().lower().strip()
+        elif hasattr(self.ui, 'textEdit_3'):
+            name_filter = self.ui.textEdit_3.toPlainText().lower().strip()
+        else:
+            name_filter = ""
 
         model = self.ui.tableView.model()
         if not model:
@@ -1755,6 +1778,8 @@ class ReportWindow(QMainWindow):
         if hasattr(self.ui, 'comboBox_18'):
             self.ui.comboBox_18.currentIndexChanged.connect(self.apply_distribution_filters)
         if hasattr(self.ui, 'textEdit_2'):
+            self.ui.textEdit_2.setPlaceholderText("Поиск по названию, модели, типу...")
+            self.ui.textEdit_2.clear()
             self.ui.textEdit_2.textChanged.connect(self.apply_distribution_filters)
 
         self.load_categories_to_combo(self.ui.comboBox_17)
@@ -1762,6 +1787,8 @@ class ReportWindow(QMainWindow):
 
         if hasattr(self.ui, 'pushButton_15'):
             self.ui.pushButton_15.clicked.connect(self.transfer_selected_items)
+        if hasattr(self.ui, 'pushButton_17'):
+            self.ui.pushButton_17.clicked.connect(self.remove_selected_room_equipment)
         if hasattr(self.ui, 'pushButton_8'):
             self.ui.pushButton_8.clicked.connect(self.save_all_distribution)
         if hasattr(self.ui, 'pushButton_9'):
@@ -1770,8 +1797,6 @@ class ReportWindow(QMainWindow):
             self.ui.pushButton_4.clicked.connect(self.save_room_distribution)
         if hasattr(self.ui, 'pushButton_6'):
             self.ui.pushButton_6.clicked.connect(self.reset_room_distribution)
-        if hasattr(self.ui, 'pushButton_7'):
-            self.ui.pushButton_7.clicked.connect(self.export_room_report)
         if hasattr(self.ui, 'pushButton_10'):
             self.ui.pushButton_10.clicked.connect(self.export_final_report)
 
@@ -1898,27 +1923,34 @@ class ReportWindow(QMainWindow):
             QMessageBox.critical(self, "Ошибка загрузки", f"Не удалось загрузить данные:\n\n{str(e)}")
 
     def setup_right_panel(self):
-        if not hasattr(self.ui, 'groupBox'):
+        room_container = getattr(self.ui, 'groupBox', None)
+        if room_container is not None:
+            layout = room_container.layout()
+            if layout is None:
+                layout = QVBoxLayout(room_container)
+                room_container.setLayout(layout)
+            else:
+                while layout.count():
+                    item = layout.takeAt(0)
+                    if item.widget():
+                        item.widget().deleteLater()
+
+            title = QLabel("Оборудование в выбранной комнате")
+            title.setStyleSheet("font-weight: bold; font-size: 14px;")
+            layout.addWidget(title)
+
+            self.room_equipment_table = QTableView()
+            layout.addWidget(self.room_equipment_table)
+            self.remove_room_equip_btn = QPushButton("Удалить выделенное оборудование из комнаты")
+            self.remove_room_equip_btn.clicked.connect(self.remove_selected_room_equipment)
+            layout.addWidget(self.remove_room_equip_btn)
+        elif hasattr(self.ui, 'tableView_3'):
+            self.room_equipment_table = self.ui.tableView_3
+        else:
             return
 
-        layout = self.ui.groupBox.layout()
-        if layout is None:
-            layout = QVBoxLayout(self.ui.groupBox)
-            self.ui.groupBox.setLayout(layout)
-        else:
-            while layout.count():
-                item = layout.takeAt(0)
-                if item.widget():
-                    item.widget().deleteLater()
-
-        title = QLabel("Оборудование в выбранной комнате")
-        title.setStyleSheet("font-weight: bold; font-size: 14px;")
-        layout.addWidget(title)
-
-        self.room_equipment_table = QTableView()
         self.room_equipment_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.room_equipment_table.setSelectionMode(QAbstractItemView.SingleSelection)
-        layout.addWidget(self.room_equipment_table)
 
         self.room_equipment_model = QStandardItemModel()
         self.room_equipment_model.setHorizontalHeaderLabels([
@@ -1942,10 +1974,6 @@ class ReportWindow(QMainWindow):
         self.room_equipment_table.setColumnWidth(9, 100)
         self.room_equipment_table.setColumnWidth(10, 100)
         self.room_equipment_table.setColumnWidth(11, 150)
-
-        self.remove_room_equip_btn = QPushButton("Удалить выделенное оборудование из комнаты")
-        self.remove_room_equip_btn.clicked.connect(self.remove_selected_room_equipment)
-        layout.addWidget(self.remove_room_equip_btn)
 
     def remove_selected_room_equipment(self):
         selection = self.room_equipment_table.selectionModel().selectedRows()
