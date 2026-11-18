@@ -483,7 +483,8 @@ class MainWindow(QMainWindow):
 
         self.setup_connections()
         self.load_initial_data()
-        self.showMaximized()
+        self.setFixedSize(self.size())
+        self.show()
 
         self.branches_list.setFocusPolicy(Qt.StrongFocus)
         self.branches_list.installEventFilter(self)
