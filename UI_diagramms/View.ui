@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>984</width>
-    <height>891</height>
+    <height>904</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -17,7 +17,7 @@
    <string notr="true"/>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <widget class="QGroupBox" name="groupBox">
+   <widget class="QWidget" name="widget" native="true">
     <property name="geometry">
      <rect>
       <x>0</x>
@@ -26,433 +26,182 @@
       <height>851</height>
      </rect>
     </property>
-    <property name="title">
-     <string>Настройки предприятия</string>
-    </property>
-    <widget class="QWidget" name="gridLayoutWidget">
+    <widget class="QListWidget" name="listWidget">
      <property name="geometry">
       <rect>
-       <x>10</x>
-       <y>20</y>
-       <width>131</width>
-       <height>41</height>
+       <x>5</x>
+       <y>5</y>
+       <width>209</width>
+       <height>526</height>
       </rect>
      </property>
-     <layout class="QGridLayout" name="gridLayout">
-      <item row="0" column="0">
-       <widget class="QLabel" name="label">
-        <property name="text">
-         <string>Название предприятия:</string>
-        </property>
-       </widget>
-      </item>
-     </layout>
     </widget>
-    <widget class="QWidget" name="gridLayoutWidget_2">
+    <widget class="QFrame" name="frame">
      <property name="geometry">
       <rect>
-       <x>140</x>
-       <y>20</y>
-       <width>831</width>
-       <height>41</height>
+       <x>220</x>
+       <y>5</y>
+       <width>451</width>
+       <height>526</height>
       </rect>
      </property>
-     <layout class="QGridLayout" name="gridLayout_2">
-      <item row="0" column="0">
-       <widget class="QLineEdit" name="lineEdit">
-        <property name="text">
-         <string/>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </widget>
-    <widget class="QWidget" name="gridLayoutWidget_3">
-     <property name="geometry">
-      <rect>
-       <x>10</x>
-       <y>60</y>
-       <width>181</width>
-       <height>41</height>
-      </rect>
+     <property name="frameShape">
+      <enum>QFrame::Shape::StyledPanel</enum>
      </property>
-     <layout class="QGridLayout" name="gridLayout_3">
-      <item row="0" column="0">
-       <widget class="QLabel" name="label_2">
-        <property name="text">
-         <string>Количество филиалов/отделов:</string>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </widget>
-    <widget class="QWidget" name="gridLayoutWidget_4">
-     <property name="geometry">
-      <rect>
-       <x>190</x>
-       <y>60</y>
-       <width>301</width>
-       <height>41</height>
-      </rect>
+     <property name="frameShadow">
+      <enum>QFrame::Shadow::Raised</enum>
      </property>
-     <layout class="QGridLayout" name="gridLayout_4">
-      <item row="0" column="0">
-       <widget class="QSpinBox" name="spinBox"/>
-      </item>
-      <item row="0" column="1">
-       <widget class="QPushButton" name="pushButton_6">
-        <property name="text">
-         <string>Сохранить</string>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </widget>
-    <widget class="QWidget" name="gridLayoutWidget_8">
-     <property name="geometry">
-      <rect>
-       <x>10</x>
-       <y>100</y>
-       <width>481</width>
-       <height>741</height>
-      </rect>
-     </property>
-     <layout class="QGridLayout" name="gridLayout_8">
-      <item row="1" column="0">
-       <widget class="QListWidget" name="listWidget"/>
-      </item>
-      <item row="0" column="0">
-       <widget class="QLabel" name="label_4">
-        <property name="text">
-         <string>Филиалы:</string>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </widget>
-    <widget class="QGroupBox" name="groupBox_3">
-     <property name="enabled">
-      <bool>true</bool>
-     </property>
-     <property name="geometry">
-      <rect>
-       <x>500</x>
-       <y>110</y>
-       <width>471</width>
-       <height>321</height>
-      </rect>
-     </property>
-     <property name="title">
-      <string>Редактирование филиалов\отделов</string>
-     </property>
-     <widget class="QFrame" name="frame">
-      <property name="enabled">
-       <bool>true</bool>
-      </property>
+     <widget class="QWidget" name="formLayoutWidget">
       <property name="geometry">
        <rect>
         <x>10</x>
-        <y>20</y>
-        <width>451</width>
-        <height>291</height>
+        <y>5</y>
+        <width>431</width>
+        <height>486</height>
        </rect>
       </property>
-      <property name="font">
-       <font>
-        <kerning>true</kerning>
-       </font>
+      <layout class="QFormLayout" name="formLayout">
+       <item row="0" column="0">
+        <widget class="QLabel" name="label">
+         <property name="text">
+          <string>Название предприятия:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="1">
+        <widget class="QLineEdit" name="lineEdit">
+         <property name="text">
+          <string/>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="0">
+        <widget class="QLabel" name="label_2">
+         <property name="text">
+          <string>Количество филиалов/отделов:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="1">
+        <widget class="QSpinBox" name="spinBox"/>
+       </item>
+       <item row="2" column="0">
+        <widget class="QLabel" name="label_3">
+         <property name="text">
+          <string>Название филиала:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="1">
+        <widget class="QLineEdit" name="lineEdit_2">
+         <property name="text">
+          <string>Название отдела\филиала</string>
+         </property>
+        </widget>
+       </item>
+       <item row="3" column="0">
+        <widget class="QLabel" name="label_11">
+         <property name="text">
+          <string>Адрес:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="3" column="1">
+        <widget class="QLineEdit" name="lineEdit_5"/>
+       </item>
+       <item row="4" column="0">
+        <widget class="QLabel" name="label_5">
+         <property name="text">
+          <string>Кол-во сторудников:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="4" column="1">
+        <widget class="QSpinBox" name="spinBox_3"/>
+       </item>
+       <item row="5" column="1">
+        <widget class="QToolButton" name="toolButton_2">
+         <property name="text">
+          <string>Указать сотрудников</string>
+         </property>
+        </widget>
+       </item>
+       <item row="6" column="0">
+        <widget class="QLabel" name="label_6">
+         <property name="text">
+          <string>Кол-во этажей:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="6" column="1">
+        <widget class="QSpinBox" name="spinBox_2"/>
+       </item>
+       <item row="7" column="0">
+        <widget class="QLabel" name="label_7">
+         <property name="text">
+          <string>Кол-во комнат:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="7" column="1">
+        <widget class="QSpinBox" name="spinBox_4"/>
+       </item>
+       <item row="8" column="1">
+        <widget class="QToolButton" name="toolButton_4">
+         <property name="text">
+          <string>Указать комнаты</string>
+         </property>
+        </widget>
+       </item>
+       <item row="9" column="1">
+        <widget class="QCheckBox" name="checkBox_2">
+         <property name="text">
+          <string>Подвальное помещение</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QPushButton" name="pushButton_4">
+      <property name="geometry">
+       <rect>
+        <x>340</x>
+        <y>495</y>
+        <width>101</width>
+        <height>24</height>
+       </rect>
       </property>
-      <property name="frameShape">
-       <enum>QFrame::Shape::StyledPanel</enum>
+      <property name="text">
+       <string>Сохранить все </string>
       </property>
-      <property name="frameShadow">
-       <enum>QFrame::Shadow::Raised</enum>
+     </widget>
+     <widget class="QPushButton" name="pushButton_5">
+      <property name="geometry">
+       <rect>
+        <x>10</x>
+        <y>495</y>
+        <width>96</width>
+        <height>26</height>
+       </rect>
       </property>
-      <widget class="QWidget" name="gridLayoutWidget_5">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>10</y>
-         <width>121</width>
-         <height>41</height>
-        </rect>
-       </property>
-       <layout class="QGridLayout" name="gridLayout_5">
-        <item row="0" column="0">
-         <widget class="QLabel" name="label_3">
-          <property name="text">
-           <string>Название филиала:</string>
-          </property>
-         </widget>
-        </item>
-       </layout>
-      </widget>
-      <widget class="QWidget" name="gridLayoutWidget_6">
-       <property name="geometry">
-        <rect>
-         <x>130</x>
-         <y>10</y>
-         <width>311</width>
-         <height>41</height>
-        </rect>
-       </property>
-       <layout class="QGridLayout" name="gridLayout_6">
-        <item row="0" column="0">
-         <widget class="QLineEdit" name="lineEdit_2">
-          <property name="text">
-           <string>Название отдела\филиала</string>
-          </property>
-         </widget>
-        </item>
-       </layout>
-      </widget>
-      <widget class="QWidget" name="gridLayoutWidget_7">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>50</y>
-         <width>121</width>
-         <height>50</height>
-        </rect>
-       </property>
-       <layout class="QGridLayout" name="gridLayout_7">
-        <item row="1" column="0">
-         <widget class="QLabel" name="label_11">
-          <property name="text">
-           <string>Адрес:</string>
-          </property>
-         </widget>
-        </item>
-       </layout>
-      </widget>
-      <widget class="QPushButton" name="pushButton_3">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>260</y>
-         <width>221</width>
-         <height>24</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string> Удалить Филиал</string>
-       </property>
-      </widget>
-      <widget class="QPushButton" name="pushButton_2">
-       <property name="geometry">
-        <rect>
-         <x>230</x>
-         <y>260</y>
-         <width>211</width>
-         <height>24</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>Сохранить</string>
-       </property>
-      </widget>
-      <widget class="QWidget" name="gridLayoutWidget_11">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>100</y>
-         <width>121</width>
-         <height>51</height>
-        </rect>
-       </property>
-       <layout class="QGridLayout" name="gridLayout_11">
-        <item row="1" column="0">
-         <widget class="QLabel" name="label_5">
-          <property name="text">
-           <string>Кол-во сторудников:</string>
-          </property>
-         </widget>
-        </item>
-       </layout>
-      </widget>
-      <widget class="QWidget" name="gridLayoutWidget_12">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>150</y>
-         <width>121</width>
-         <height>51</height>
-        </rect>
-       </property>
-       <layout class="QGridLayout" name="gridLayout_12">
-        <item row="1" column="0">
-         <widget class="QLabel" name="label_6">
-          <property name="text">
-           <string>Кол-во этажей:</string>
-          </property>
-         </widget>
-        </item>
-       </layout>
-      </widget>
-      <widget class="QWidget" name="gridLayoutWidget_14">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>200</y>
-         <width>121</width>
-         <height>51</height>
-        </rect>
-       </property>
-       <layout class="QGridLayout" name="gridLayout_14">
-        <item row="0" column="1">
-         <widget class="QLabel" name="label_7">
-          <property name="text">
-           <string>Кол-во комнат:</string>
-          </property>
-         </widget>
-        </item>
-       </layout>
-      </widget>
-      <widget class="QWidget" name="gridLayoutWidget_15">
-       <property name="geometry">
-        <rect>
-         <x>130</x>
-         <y>50</y>
-         <width>311</width>
-         <height>51</height>
-        </rect>
-       </property>
-       <layout class="QGridLayout" name="gridLayout_15">
-        <item row="0" column="0">
-         <widget class="QLineEdit" name="lineEdit_5"/>
-        </item>
-       </layout>
-      </widget>
-      <widget class="QWidget" name="gridLayoutWidget_10">
-       <property name="geometry">
-        <rect>
-         <x>130</x>
-         <y>100</y>
-         <width>95</width>
-         <height>51</height>
-        </rect>
-       </property>
-       <layout class="QGridLayout" name="gridLayout_10">
-        <item row="0" column="0">
-         <widget class="QSpinBox" name="spinBox_3"/>
-        </item>
-       </layout>
-      </widget>
-      <widget class="QWidget" name="gridLayoutWidget_9">
-       <property name="geometry">
-        <rect>
-         <x>130</x>
-         <y>150</y>
-         <width>95</width>
-         <height>51</height>
-        </rect>
-       </property>
-       <layout class="QGridLayout" name="gridLayout_9">
-        <item row="0" column="0">
-         <widget class="QSpinBox" name="spinBox_4"/>
-        </item>
-       </layout>
-      </widget>
-      <widget class="QWidget" name="gridLayoutWidget_13">
-       <property name="geometry">
-        <rect>
-         <x>130</x>
-         <y>200</y>
-         <width>95</width>
-         <height>51</height>
-        </rect>
-       </property>
-       <layout class="QGridLayout" name="gridLayout_13">
-        <item row="0" column="0">
-         <widget class="QSpinBox" name="spinBox_2"/>
-        </item>
-       </layout>
-      </widget>
-      <widget class="QWidget" name="gridLayoutWidget_22">
-       <property name="geometry">
-        <rect>
-         <x>220</x>
-         <y>100</y>
-         <width>131</width>
-         <height>51</height>
-        </rect>
-       </property>
-       <layout class="QGridLayout" name="gridLayout_23">
-        <item row="0" column="0">
-         <widget class="QToolButton" name="toolButton_2">
-          <property name="text">
-           <string>Указать сотрудников</string>
-          </property>
-         </widget>
-        </item>
-       </layout>
-      </widget>
-      <widget class="QWidget" name="gridLayoutWidget_23">
-       <property name="geometry">
-        <rect>
-         <x>220</x>
-         <y>200</y>
-         <width>111</width>
-         <height>51</height>
-        </rect>
-       </property>
-       <layout class="QGridLayout" name="gridLayout_24">
-        <item row="0" column="0">
-         <widget class="QToolButton" name="toolButton_4">
-          <property name="text">
-           <string>Указать комнаты</string>
-          </property>
-         </widget>
-        </item>
-       </layout>
-      </widget>
-      <widget class="QWidget" name="gridLayoutWidget_24">
-       <property name="geometry">
-        <rect>
-         <x>232</x>
-         <y>150</y>
-         <width>181</width>
-         <height>51</height>
-        </rect>
-       </property>
-       <layout class="QGridLayout" name="gridLayout_25">
-        <item row="0" column="0">
-         <widget class="QCheckBox" name="checkBox_2">
-          <property name="text">
-           <string>Подвальное помещение</string>
-          </property>
-         </widget>
-        </item>
-       </layout>
-      </widget>
+      <property name="text">
+       <string>Сбросить все </string>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="pushButton_3">
+      <property name="geometry">
+       <rect>
+        <x>230</x>
+        <y>495</y>
+        <width>106</width>
+        <height>26</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string> Удалить Филиал</string>
+      </property>
      </widget>
     </widget>
-   </widget>
-   <widget class="QPushButton" name="pushButton_4">
-    <property name="geometry">
-     <rect>
-      <x>0</x>
-      <y>860</y>
-      <width>831</width>
-      <height>24</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>Сохранить все изменения</string>
-    </property>
-   </widget>
-   <widget class="QPushButton" name="pushButton_5">
-    <property name="geometry">
-     <rect>
-      <x>830</x>
-      <y>860</y>
-      <width>151</width>
-      <height>24</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>Сбросить все настройки</string>
-    </property>
    </widget>
   </widget>
   <action name="action">
