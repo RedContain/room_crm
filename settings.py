@@ -508,6 +508,74 @@ class MainWindow(QMainWindow):
 
         self.reset_all_btn.setShortcut(Qt.Key_F5)
         self.reset_all_btn.setToolTip("Полный сброс базы данных (F5)")
+        self.branches_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.branches_list.customContextMenuRequested.connect(self.show_branch_context_menu)
+
+    def show_branch_context_menu(self, position):
+        item = self.branches_list.itemAt(position)
+        if item is not None:
+            self.branches_list.setCurrentItem(item)
+            if item.data(Qt.UserRole) != self.current_branch_id:
+                self.on_branch_selected(item)
+
+        menu = QMenu(self)
+        add_action = menu.addAction("Добавить филиал")
+        edit_action = menu.addAction("Редактировать выбранный филиал")
+        delete_action = menu.addAction("Удалить выбранный филиал")
+        has_selection = self.branches_list.currentItem() is not None
+        edit_action.setEnabled(has_selection)
+        delete_action.setEnabled(has_selection)
+
+        action = menu.exec(self.branches_list.mapToGlobal(position))
+        if action == add_action:
+            self.add_branch_from_context_menu()
+        elif action == edit_action:
+            self.edit_selected_branch()
+        elif action == delete_action:
+            self.delete_branch()
+
+    def add_branch_from_context_menu(self):
+        branches = self.db.get_all_branches()
+        existing_names = {branch[1] for branch in branches}
+        suffix = len(branches) + 1
+        default_name = f"Филиал №{suffix}"
+        while default_name in existing_names:
+            suffix += 1
+            default_name = f"Филиал №{suffix}"
+
+        name, accepted = QInputDialog.getText(
+            self, "Добавить филиал", "Название филиала:", QLineEdit.Normal, default_name
+        )
+        name = name.strip()
+        if not accepted:
+            return
+        if not name:
+            QMessageBox.warning(self, "Ошибка", "Введите название филиала")
+            return
+
+        try:
+            branch_id = self.db.add_branch(name, floors_count=1, address="")
+            self.load_branches()
+            for index in range(self.branches_list.count()):
+                item = self.branches_list.item(index)
+                if item.data(Qt.UserRole) == branch_id:
+                    self.branches_list.setCurrentItem(item)
+                    self.on_branch_selected(item)
+                    break
+            self.changes_made = True
+            self.branch_name_edit.setFocus()
+            self.branch_name_edit.selectAll()
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка", f"Не удалось добавить филиал: {e}")
+
+    def edit_selected_branch(self):
+        item = self.branches_list.currentItem()
+        if item is None:
+            return
+        if item.data(Qt.UserRole) != self.current_branch_id:
+            self.on_branch_selected(item)
+        self.branch_name_edit.setFocus()
+        self.branch_name_edit.selectAll()
 
     def set_branch_editor_enabled(self, enabled):
         if self.branch_group is not None:
