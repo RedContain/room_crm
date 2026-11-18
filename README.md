@@ -37,3 +37,13 @@ Desktop-приложение для автоматизации учёта, хр�
 - 8 ГБ RAM
 - Монитор с поддержкой разрешения 1920 на 1080
 - Место на жестком диске: 1 ГБ
+
+## Скриншоты
+
+### Главное окно
+![Главное окно](https://github.com/RedContain/room_crm/blob/master/state_crm_main.png)
+
+![Инвентаризация](https://github.com/RedContain/room_crm/blob/master/room%202.png)
+
+![Распределение](https://github.com/RedContain/room_crm/blob/master/state_crm_main.png)
+
